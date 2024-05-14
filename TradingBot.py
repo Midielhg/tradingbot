@@ -23,15 +23,12 @@ login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce1')
 
 
 #initial parameters
-symbol = 'TQQQ'
-quantity = 1
+long_symbol = 'TQQQ'
+short_symbol = 'SQQQ'
 
-last_price = rh.get_latest_price(symbol, includeExtendedHours=True)
-last_price = float(last_price[0])
-print(symbol, "last price: $",last_price)
 
 #supper trend parameters
-period = 100  
+period = 50
 factor = 1
 
 #market status
@@ -43,12 +40,14 @@ def market_status():
 # print current positions
 positions_data = rh.account.build_holdings()
 
-for ticker, data in positions_data.items():
-    print( f'Ticker: {ticker}, Quantity: {data["quantity"]}, Market Value: {data["equity"]}')
+# Print Positions
+if positions_data == {}: #if there are no positions
+    print("No positions")
+else:
+    for ticker, data in positions_data.items():
+        print( f'Position: {ticker}, Quantity: {data["quantity"]}, Market Value: {data["equity"]}')
+        quantity = data["quantity"]
 
-# print buying power
-account_info = rh.account.load_account_profile()
-print("Buying Power: ", account_info['buying_power'])
 
 # if market value is > 0, you are in a position and you can sell
 if market_status() == True:
@@ -64,7 +63,7 @@ else:
     print ("Market is closed")
     print("bot won't run")
     # end the program
-    # sys.exit()
+    sys.exit()
         
 # if position is TQQQ, you are long 
 if ticker == 'TQQQ':
@@ -72,7 +71,7 @@ if ticker == 'TQQQ':
     in_shortPosition = False
     print("You are long")
     print("Looking for a place to short")
-elif ticker == 'QQQ':
+elif ticker == 'SQQQ':
     in_longPosition = False
     in_shortPosition = True
     print("You are short")
@@ -83,10 +82,19 @@ if datetime.now().hour == 15 and datetime.now().minute >= 58:
     print("Market is about to close")
     print("Closing all positions")
     # close all positions
-    rh.order_sell_market(symbol, quantity)
+    if in_longPosition == True:
+        rh.order_sell_market(long_symbol, quantity)
+        print("Closing TQQQ Long position")
+    elif in_shortPosition == True:
+        rh.order_buy_market(short_symbol, quantity)
+        print("Closing TQQQ Short position")
     print("All positions closed")
     # end the program
-    # sys.exit()
+    sys.exit()
+    
+# print buying power
+account_info = rh.account.load_account_profile()
+print("Buying Power: ", account_info['buying_power'])
 
 
 
@@ -153,16 +161,14 @@ def check_buy_sell_signals(df):
         
     if not df['in_uptrend'][previous_row_index] and df['in_uptrend'][last_row_index]: #if the previous row was not in an uptrend and the last row is in an uptrend
         print("changed to uptrend, Long")
-        if not in_longPosition: #if not on long position buy
-            wb.get_trade_token('022617')       
-            order = wb.place_order(stock=symbol, action='BUY', orderType='MKT', enforce='DAY', quant=shares)
-            print("buying TQQQ")
+        if not in_longPosition: #if not on long position, buy
+            order = rh.order_buy_market(symbol, quantity)
+            print("buying ", symbol)
             print(order)
             in_longPosition = True
         
             if in_shortPosition: #if is on Short position Buy back to close the Short position
-                wb.get_trade_token('022617')       
-                order = wb.place_order(stock=symbol, action='BUY', orderType='MKT', enforce='DAY', quant=shares)
+                order = rh.order_buy_market(symbol, quantity)
                 print("Closing TQQQ Short position")
                 print(order)
                 in_shortPosition = False
@@ -174,15 +180,13 @@ def check_buy_sell_signals(df):
     if df['in_uptrend'][previous_row_index] and not df['in_uptrend'][last_row_index]:#if the previous row was in an uptrend and the last row is not in an uptrend
         print ("changed to downtrend, Short")
         if not in_shortPosition: #if is not on Short position Sell
-            wb.get_trade_token('022617')       
-            order = wb.place_order(stock=symbol, action='SELL', orderType='MKT', enforce='DAY', quant=shares)
+            order = rh.order_sell_market(symbol, quantity)
             print("Shorting TQQQ")
             print(order)
             in_shortPosition = True
         
             if in_longPosition: #if is on Long position Sell to close the Long position
-                wb.get_trade_token('022617')       
-                order = wb.place_order(stock=symbol, action='SELL', orderType='MKT', enforce='DAY', quant=shares)
+                order = rh.order_sell_market(symbol, quantity)
                 print("Closing TQQQ Long Position")
                 print(order)
                 in_longPosition = False
@@ -195,7 +199,7 @@ def check_buy_sell_signals(df):
 def run_bot():
     
     print(f"\nFetching new bars for {datetime.now().isoformat()}")
-    bars = wb.get_bars(stock=symbol, interval='m1', count=100, extendTrading=1) #get the last 100 bars of TQQQ at 1 minute intervals
+    bars = wb.get_bars(stock=long_symbol, interval='m1', count=100, extendTrading=1) #get the last 100 bars of TQQQ at 1 minute intervals
     df = pd.DataFrame(bars[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']) #convert the fetched data into a pandas data-frame
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms') #convert the timestamp data to datetime format
     supertrend(df, period, factor) #calculate the supertrend indicator
@@ -205,4 +209,4 @@ def run_bot():
 schedule.every(3).seconds.do(run_bot) #run the bot every 3 seconds
 while True:
     schedule.run_pending() #run the scheduled tasks
-    time.sleep(1) #wait 1 second
+    time.sleep(0.01) #wait 1 second
