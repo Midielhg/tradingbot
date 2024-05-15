@@ -18,15 +18,12 @@ import pprint
 
 login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce1')
 
-ticker = "F"
+ticker = "TQQQ"
 aset = "stock"
 
 #supper trend parameters
 period = 10
-factor = 1
-
-
-
+factor = 3
 
 
 
@@ -75,6 +72,14 @@ def supertrend(df, period, atr_multiplier): #supertrend
 #buy and sell signals
 def check_buy_sell_signals(df):
     global in_longPosition #global in_longPosition
+    
+    # print buying power
+    account_info = rh.account.load_account_profile()
+    buying_power = float(account_info['buying_power'])
+    print("Buying Power: $", buying_power)
+    account_number = account_info['account_number']
+
+    buying_power = buying_power - 1
 
     if aset == "stock":
         stock_positions = rh.account.get_all_positions()
@@ -85,7 +90,7 @@ def check_buy_sell_signals(df):
             if item['symbol'] == ticker:
                 quantity = float(item['quantity'])
                 market_value = float(item['quantity']) * float(stock_quote['last_trade_price'])
-                print("Stock Market Value: $", float(market_value))
+                print(ticker, "Market Value: $", float(market_value))
     elif aset == "crypto":
         crypto_positions = rh.get_crypto_positions()
         crypto_quote = rh.get_crypto_quote(ticker)
@@ -97,24 +102,6 @@ def check_buy_sell_signals(df):
                 # market_value = quantity * price
                 market_value = float(item['quantity']) * float(crypto_quote['mark_price'])
                 print("Crypto Market Value: $", float(market_value))
-    
-            
-    # print buying power
-    account_info = rh.account.load_account_profile()
-    buying_power = float(account_info['buying_power'])
-    print("Buying Power: $", buying_power)
-    account_number = account_info['account_number']
-
-    buying_power = buying_power - 1
-    
-    print ("buying F")
-
-    order = rh.order_buy_limit(ticker, 1, 14, account_number, timeInForce='gtc', extendedHours=True)
-    print("Buying ", ticker)
-    pprint.pprint(order)
-        
-    print(order)
-
 
     # print if in long position
     if market_value >= 1:
@@ -125,7 +112,6 @@ def check_buy_sell_signals(df):
     # print(df.tail(2)) #print the last 2 rows of the dataframe
     last_row_index = len(df.index) - 1 #get the index of the last row
     previous_row_index = last_row_index - 1 #get the index of the previous row
-    
 
     if aset == "stock":
         if df['in_uptrend'][last_row_index]:
@@ -168,9 +154,7 @@ def check_buy_sell_signals(df):
                 in_longPosition = False
             else:
                 print("You don't have an open position, Saving Money")
-            
-    
-        
+
 #Run the bot  
 def run_bot():
     print(f"\nFetching new bars for {datetime.now().isoformat()}")
