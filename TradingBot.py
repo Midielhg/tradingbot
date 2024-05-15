@@ -23,7 +23,7 @@ login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce1')
 
 
 #initial parameters
-long_symbol = 'TQQQ'
+symbol = 'TQQQ'
 short_symbol = 'SQQQ'
 
 

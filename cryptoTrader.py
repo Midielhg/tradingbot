@@ -18,38 +18,12 @@ import pprint
 
 login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce1')
 
-crypto = "DOGE"
+ticker = "F"
+aset = "stock"
 
 #supper trend parameters
 period = 10
 factor = 1
-
-# acount info
-crypto_positions = rh.get_crypto_positions()
-quote = rh.get_crypto_quote(crypto)
-quantity = 0
-market_value = 0
-for item in crypto_positions:
-    if item['currency']['code'] == crypto:
-        quantity = float(item['quantity'])
-        # market_value = quantity * price
-        market_value = float(item['quantity']) * float(quote['mark_price'])
-        print(crypto, "Position Market Value: $", market_value)
-        
-# print buying power
-account_info = rh.account.load_account_profile()
-buying_power = float(account_info['buying_power'])
-print("Buying Power: $", buying_power)
-
-buying_power = buying_power - 1
-
-# print if in long position
-if market_value >= 1:
-    in_longPosition = True
-    print("You are in a long position, looking for a place to sell")
-else:
-    in_longPosition = False
-    print("You are not in a long position, looking for a place to buy")
 
 
 
@@ -102,58 +76,105 @@ def supertrend(df, period, atr_multiplier): #supertrend
 def check_buy_sell_signals(df):
     global in_longPosition #global in_longPosition
 
+    if aset == "stock":
+        stock_positions = rh.account.get_all_positions()
+        stock_quote = rh.get_stock_quote_by_symbol(ticker)
+        quantity = 0
+        market_value = 0
+        for item in stock_positions:
+            if item['symbol'] == ticker:
+                quantity = float(item['quantity'])
+                market_value = float(item['quantity']) * float(stock_quote['last_trade_price'])
+                print("Stock Market Value: $", float(market_value))
+    elif aset == "crypto":
+        crypto_positions = rh.get_crypto_positions()
+        crypto_quote = rh.get_crypto_quote(ticker)
+        quantity = 0
+        market_value = 0
+        for item in crypto_positions:
+            if item['currency']['code'] == ticker:
+                quantity = float(item['quantity'])
+                # market_value = quantity * price
+                market_value = float(item['quantity']) * float(crypto_quote['mark_price'])
+                print("Crypto Market Value: $", float(market_value))
+    
+            
+    # print buying power
+    account_info = rh.account.load_account_profile()
+    buying_power = float(account_info['buying_power'])
+    print("Buying Power: $", buying_power)
+    account_number = account_info['account_number']
+
+    buying_power = buying_power - 1
+    
+    print ("buying F")
+
+    order = rh.order_buy_limit(ticker, 1, 14, account_number, timeInForce='gtc', extendedHours=True)
+    print("Buying ", ticker)
+    pprint.pprint(order)
+        
+    print(order)
+
+
+    # print if in long position
+    if market_value >= 1:
+        in_longPosition = True
+    else:
+        in_longPosition = False    
+
     # print(df.tail(2)) #print the last 2 rows of the dataframe
     last_row_index = len(df.index) - 1 #get the index of the last row
     previous_row_index = last_row_index - 1 #get the index of the previous row
     
-    #if the current row is in an uptrend
-    if df['in_uptrend'][last_row_index]:
-        # Define the variable "buying_power"
-        print("Current Trend: UpTrend")
-        if in_longPosition == False:
-            order = rh.order_buy_crypto_by_price(crypto, buying_power, timeInForce='gtc')
-            print("Buying ", crypto)
-            pprint.pprint(order)
-            in_longPosition = True  
-        else:
-            print("already in Long, Making Money")
-    else:
-        print("Current Trend: DownTrend")
-        if in_longPosition == True:
-            order = rh.order_sell_crypto_by_quantity(crypto, quantity, timeInForce='gtc')
-            print("Selling",quantity, crypto)
-            pprint.pprint(order)
-            in_longPosition = False
-        else:
-            print("Already out of the position, Saving Money")
 
+    if aset == "stock":
+        if df['in_uptrend'][last_row_index]:
+            # Define the variable "buying_power"
+            print("Current Trend: UpTrend")
+            if in_longPosition == False:
+                order = rh.order_buy_market(ticker, buying_power)
+                print("Buying ", ticker)
+                pprint.pprint(order)
+                in_longPosition = True  
+            else:
+                print("You are Long, Making Money")
+        else:
+            print("Current Trend: DownTrend")
+            if in_longPosition == True:
+                order = rh.order_sell_market(ticker, quantity)
+                print("Selling",quantity, ticker)
+                pprint.pprint(order)
+                in_longPosition = False
+            else:
+                print("You don't have an open position, Saving Money")
+    elif aset == "crypto":
+    #if the current row is in an uptrend
+        if df['in_uptrend'][last_row_index]:
+            # Define the variable "buying_power"
+            print("Current Trend: UpTrend")
+            if in_longPosition == False:
+                order = rh.order_buy_crypto_by_price(ticker, buying_power, timeInForce='gtc')
+                print("Buying ", ticker)
+                pprint.pprint(order)
+                in_longPosition = True  
+            else:
+                print("You are Long, Making Money")
+        else:
+            print("Current Trend: DownTrend")
+            if in_longPosition == True:
+                order = rh.order_sell_crypto_by_quantity(ticker, quantity, timeInForce='gtc')
+                print("Selling",quantity, ticker)
+                pprint.pprint(order)
+                in_longPosition = False
+            else:
+                print("You don't have an open position, Saving Money")
+            
     
-    # #if trend change from downtrend to uptrend, buy 
-    # if not df['in_uptrend'][previous_row_index] and df['in_uptrend'][last_row_index]: #if the previous row was not in an uptrend and the last row is in an uptrend
-    #     print("changed to uptrend, Long")
-    #     if  in_longPosition == False: #if not on long position, buy
-    #         order = rh.order_buy_crypto_by_price(crypto, buying_power, timeInForce='gtc')
-    #         print("Buying ", crypto)
-    #         print(order)
-    #         in_longPosition = True
-    #     else:
-    #         print("already in Long, nothing to do")
-        
-    # # if trend change from uptrend to downtrend, sell
-    # if df['in_uptrend'][previous_row_index] and not df['in_uptrend'][last_row_index]:#if the previous row was in an uptrend and the last row is not in an uptrend
-    #     print ("changed to downtrend, Short")
-    #     if in_longPosition == True: #if is not on Short position Sell
-    #         order = rh.order_sell_crypto_by_price(crypto, total_market_value, timeInForce='gtc')   
-    #         print("Selling", crypto)
-    #         print(order)
-    #         in_longPosition = False
-    #     else:
-    #         print("already in Short, nothing to do")
         
 #Run the bot  
 def run_bot():
     print(f"\nFetching new bars for {datetime.now().isoformat()}")
-    bars = wb.get_bars(stock=crypto, interval='m1', count=100, extendTrading=1) #get the last 100 bars of TQQQ at 1 minute intervals
+    bars = wb.get_bars(stock=ticker, interval='m1', count=100, extendTrading=1) #get the last 100 bars of TQQQ at 1 minute intervals
     df = pd.DataFrame(bars[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']) #convert the fetched data into a pandas data-frame
     
     try:
@@ -166,6 +187,7 @@ def run_bot():
     check_buy_sell_signals(df)#check for buy and sell signals 
 
 schedule.every(3).seconds.do(run_bot) #run the bot every 3 seconds
+
 while True:
     schedule.run_pending() #run the scheduled tasks
     time.sleep(1) #wait 1 second
