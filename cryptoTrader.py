@@ -21,10 +21,14 @@ login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce1')
 crypto = "DOGE"
 
 #supper trend parameters
-period = 50
+period = 10
 factor = 1
+    
 
 crypto_positions = rh.get_crypto_positions()
+
+# Initialize total market value
+total_market_value = 0
 
 # Print Positions
 for item in crypto_positions:
@@ -33,34 +37,28 @@ for item in crypto_positions:
     if item['cost_bases']:
         # Assuming market value is in 'direct_cost_basis'
         market_value = float(item['cost_bases'][0]['direct_cost_basis'])
+        # Add market value to total
+        total_market_value += market_value
         if market_value >= 0.1:
-            print(f'Crypto Name: {crypto_name}, Market Value: {market_value}')
-        
-# print buying power
-account_info = rh.account.load_account_profile()
-print("Buying Power: ", account_info['buying_power'])
-
-
-# Setting up Position
-if market_value >= 0.1:
+            print("Crypto Name: ", crypto_name, "Market Value: ", market_value)
+ 
+ 
+print("Total Market Value: ", total_market_value)
+ 
+if total_market_value >= 0.1:
     in_longPosition = True
-    print("You are in a position")
-    print("Looking for a place to short")
+    print("You are in a long position, looking for a place to sell")
 else:
     in_longPosition = False
-    print("You are not in a position")
-    print("looking for a place to go long")
-    
-    
+    print("You are not in a long position, looking for a place to buy")
+            
+
 
 
     
 # print buying power
 account_info = rh.account.load_account_profile()
 print("Buying Power: ", account_info['buying_power'])
-
-
-
 
 
 
@@ -113,13 +111,6 @@ def check_buy_sell_signals(df):
     print(df.tail(2)) #print the last 2 rows of the dataframe
     last_row_index = len(df.index) - 1 #get the index of the last row
     previous_row_index = last_row_index - 1 #get the index of the previous row
-
-    if in_longPosition == True:
-        print("You are in a long position")
-    elif in_longPosition:
-        print("You are not in a position")
-        
-        
         
     if not df['in_uptrend'][previous_row_index] and df['in_uptrend'][last_row_index]: #if the previous row was not in an uptrend and the last row is in an uptrend
         print("changed to uptrend, Long")
@@ -155,4 +146,4 @@ def run_bot():
 schedule.every(3).seconds.do(run_bot) #run the bot every 3 seconds
 while True:
     schedule.run_pending() #run the scheduled tasks
-    time.sleep(0.01) #wait 1 second
+    time.sleep(1) #wait 1 second
