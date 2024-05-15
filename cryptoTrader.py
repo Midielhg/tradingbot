@@ -8,12 +8,13 @@ warnings.filterwarnings('ignore')
 import numpy as np
 from datetime import datetime
 import time
-wb = webull()
 import robin_stocks.robinhood as rh
 import sys
 import os
 import pyotp
 import robin_stocks as rb
+wb = webull()
+import pprint
 
 login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce1')
 
@@ -23,25 +24,24 @@ crypto = "DOGE"
 period = 10
 factor = 1
 
-# get positions
+# acount info
 crypto_positions = rh.get_crypto_positions()
 quote = rh.get_crypto_quote(crypto)
-
-
-# Print Positions
+quantity = 0
+market_value = 0
 for item in crypto_positions:
     if item['currency']['code'] == crypto:
-        quantity = item['quantity']
-        print(crypto, "quantity: ", quantity)
-        # market_value = qurrency * quantity
+        quantity = float(item['quantity'])
+        # market_value = quantity * price
         market_value = float(item['quantity']) * float(quote['mark_price'])
         print(crypto, "Position Market Value: $", market_value)
-
-            
+        
 # print buying power
 account_info = rh.account.load_account_profile()
 buying_power = float(account_info['buying_power'])
 print("Buying Power: $", buying_power)
+
+buying_power = buying_power - 1
 
 # print if in long position
 if market_value >= 1:
@@ -50,6 +50,11 @@ if market_value >= 1:
 else:
     in_longPosition = False
     print("You are not in a long position, looking for a place to buy")
+
+
+
+
+
 
 #indicators
 def tr(data):#true range
@@ -103,23 +108,24 @@ def check_buy_sell_signals(df):
     
     #if the current row is in an uptrend
     if df['in_uptrend'][last_row_index]:
+        # Define the variable "buying_power"
         print("Current Trend: UpTrend")
         if in_longPosition == False:
             order = rh.order_buy_crypto_by_price(crypto, buying_power, timeInForce='gtc')
             print("Buying ", crypto)
-            print(order)
-            in_longPosition = True
+            pprint.pprint(order)
+            in_longPosition = True  
         else:
             print("already in Long, Making Money")
     else:
         print("Current Trend: DownTrend")
         if in_longPosition == True:
-            order = rh.order_sell_crypto_by_price(crypto, quantity, timeInForce='gtc')   
-            print("Selling", crypto)
-            print(order)
+            order = rh.order_sell_crypto_by_quantity(crypto, quantity, timeInForce='gtc')
+            print("Selling",quantity, crypto)
+            pprint.pprint(order)
             in_longPosition = False
         else:
-            print("Already out of the position, Saved from the DownTrend")
+            print("Already out of the position, Saving Money")
 
     
     # #if trend change from downtrend to uptrend, buy 
