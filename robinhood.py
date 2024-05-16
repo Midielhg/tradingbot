@@ -18,13 +18,49 @@ import pprint
 
 login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce1')
 
-ticker = "TQQQ"
-aset = "stock"
+ticker = "DOGE"
+asset = "crypto"
+
 
 #supper trend parameters
 period = 10
 factor = 3
 
+def BUY_Stock_Market(ticker, quantity):
+    # Define the variable "buying_power"
+    order = rh.order_buy_market(ticker, quantity)
+    print("Buying ", ticker)
+    pprint.pprint(order)
+
+def SELL_Stock_Market(ticker, quantity):
+    # Define the variable "buying_power"
+    order = rh.order_sell_market(ticker, quantity)
+    print("Selling ", ticker)
+    pprint.pprint(order)
+
+def BUY_Stock_Limit(ticker, quantity, price):
+    # Define the variable "buying_power"
+    order = rh.order_buy_limit(ticker, quantity, price)
+    print("Buying ", ticker)
+    pprint.pprint(order)
+
+def SELL_Stock_Limit(ticker, quantity, price):
+    # Define the variable "buying_power"
+    order = rh.order_sell_limit(ticker, quantity, price)
+    print("Selling ", ticker)
+    pprint.pprint(order)
+
+def BUY_Crypto(ticker, quantity):
+    # Define the variable "buying_power"
+    order = rh.order_buy_market(ticker, quantity)
+    print("Buying ", ticker)
+    pprint.pprint(order)
+
+def SELL_Crypto(ticker, quantity):
+    # Define the variable "buying_power"
+    order = rh.order_sell_market(ticker, quantity)
+    print("Selling ", ticker)
+    pprint.pprint(order)
 
 
 #indicators
@@ -66,22 +102,26 @@ def supertrend(df, period, atr_multiplier): #supertrend
 
             if not df['in_uptrend'][current] and df['upperband'][current] > df['upperband'][previous]: #if the current row is in a downtrend and the current upper band is greater than the previous upper band
                 df['upperband'][current] = df['upperband'][previous] #set the current upper band to be the same as the previous upper band
-        
+
     return df
 
 #buy and sell signals
-def check_buy_sell_signals(df):
+def place_orders(df):
     global in_longPosition #global in_longPosition
     
-    # print buying power
+        # print(df.tail(2)) #print the last 2 rows of the dataframe
+    last_row_index = len(df.index) - 1 #get the index of the last row
+    previous_row_index = last_row_index - 1 #get the index of the previous row
+
+
+    # check account buying powet
     account_info = rh.account.load_account_profile()
     buying_power = float(account_info['buying_power'])
-    print("Buying Power: $", buying_power)
-    account_number = account_info['account_number']
-
     buying_power = buying_power - 1
-
-    if aset == "stock":
+    print("Buying Power: $", buying_power)
+    
+# place orders if asset is stocks 
+    if asset == "stock":
         stock_positions = rh.account.get_all_positions()
         stock_quote = rh.get_stock_quote_by_symbol(ticker)
         quantity = 0
@@ -91,29 +131,12 @@ def check_buy_sell_signals(df):
                 quantity = float(item['quantity'])
                 market_value = float(item['quantity']) * float(stock_quote['last_trade_price'])
                 print(ticker, "Market Value: $", float(market_value))
-    elif aset == "crypto":
-        crypto_positions = rh.get_crypto_positions()
-        crypto_quote = rh.get_crypto_quote(ticker)
-        quantity = 0
-        market_value = 0
-        for item in crypto_positions:
-            if item['currency']['code'] == ticker:
-                quantity = float(item['quantity'])
-                # market_value = quantity * price
-                market_value = float(item['quantity']) * float(crypto_quote['mark_price'])
-                print("Crypto Market Value: $", float(market_value))
 
-    # print if in long position
-    if market_value >= 1:
-        in_longPosition = True
-    else:
-        in_longPosition = False    
+        if market_value >= 1:
+            in_longPosition = True
+        else:
+            in_longPosition = False 
 
-    # print(df.tail(2)) #print the last 2 rows of the dataframe
-    last_row_index = len(df.index) - 1 #get the index of the last row
-    previous_row_index = last_row_index - 1 #get the index of the previous row
-
-    if aset == "stock":
         if df['in_uptrend'][last_row_index]:
             # Define the variable "buying_power"
             print("Current Trend: UpTrend")
@@ -133,8 +156,25 @@ def check_buy_sell_signals(df):
                 in_longPosition = False
             else:
                 print("You don't have an open position, Saving Money")
-    elif aset == "crypto":
-    #if the current row is in an uptrend
+# place orders if asset is crypto
+    elif asset == "crypto":
+        crypto_positions = rh.get_crypto_positions()
+        crypto_quote = rh.get_crypto_quote(ticker)
+        quantity = 0
+        market_value = 0
+        for item in crypto_positions:
+            if item['currency']['code'] == ticker:
+                quantity = float(item['quantity'])
+                # market_value = quantity * price
+                market_value = float(item['quantity']) * float(crypto_quote['mark_price'])
+                print("Crypto Market Value: $", float(market_value))
+
+        # print if in long position
+        if market_value >= 1:
+            in_longPosition = True
+        else:
+            in_longPosition = False 
+
         if df['in_uptrend'][last_row_index]:
             # Define the variable "buying_power"
             print("Current Trend: UpTrend")
@@ -168,10 +208,11 @@ def run_bot():
         return  # Skip the rest of the function if an error occurs
 
     supertrend(df, period, factor) #calculate the supertrend indicator
-    check_buy_sell_signals(df)#check for buy and sell signals 
+    place_orders(df)#check for buy and sell signals 
 
 schedule.every(3).seconds.do(run_bot) #run the bot every 3 seconds
 
 while True:
+    
     schedule.run_pending() #run the scheduled tasks
     time.sleep(1) #wait 1 second
