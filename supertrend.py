@@ -26,41 +26,7 @@ asset = "crypto"
 period = 10
 factor = 3
 
-def BUY_Stock_Market(ticker, quantity):
-    # Define the variable "buying_power"
-    order = rh.order_buy_market(ticker, quantity)
-    print("Buying ", ticker)
-    pprint.pprint(order)
 
-def SELL_Stock_Market(ticker, quantity):
-    # Define the variable "buying_power"
-    order = rh.order_sell_market(ticker, quantity)
-    print("Selling ", ticker)
-    pprint.pprint(order)
-
-def BUY_Stock_Limit(ticker, quantity, price):
-    # Define the variable "buying_power"
-    order = rh.order_buy_limit(ticker, quantity, price)
-    print("Buying ", ticker)
-    pprint.pprint(order)
-
-def SELL_Stock_Limit(ticker, quantity, price):
-    # Define the variable "buying_power"
-    order = rh.order_sell_limit(ticker, quantity, price)
-    print("Selling ", ticker)
-    pprint.pprint(order)
-
-def BUY_Crypto(ticker, quantity):
-    # Define the variable "buying_power"
-    order = rh.order_buy_market(ticker, quantity)
-    print("Buying ", ticker)
-    pprint.pprint(order)
-
-def SELL_Crypto(ticker, quantity):
-    # Define the variable "buying_power"
-    order = rh.order_sell_market(ticker, quantity)
-    print("Selling ", ticker)
-    pprint.pprint(order)
 
 
 #indicators
