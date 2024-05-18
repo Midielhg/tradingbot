@@ -75,7 +75,7 @@ def supertrend(df, period, atr_multiplier): #supertrend
 def place_orders(df):
     global in_longPosition #global in_longPosition
     
-        # print(df.tail(2)) #print the last 2 rows of the dataframe
+    print(df.tail(2)) #print the last 2 rows of the dataframe
     last_row_index = len(df.index) - 1 #get the index of the last row
     previous_row_index = last_row_index - 1 #get the index of the previous row
 

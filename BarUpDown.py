@@ -18,28 +18,45 @@ import pprint
 
 login = rh.login('midielhg@gmail.com', 'nuGcej-famzoj-vafce1')
 
-ticker_up = "DOGE"  # Example ticker for going up
-ticker_down = "DOGE"  # Example ticker for going down
+ticker_up = "TQQQ"  # Example ticker for going up
+ticker_down = "SQQQ"  # Example ticker for going down
+asset = "stock"
 
+# Initialize position flags
+in_longPosition_up = False
+in_longPosition_down = False
 
+def heikin_ashi(df):
+    ha_df = df.copy()
+    
+    # Heikin Ashi close is the average of the open, close, high, and low values
+    ha_df['ha_close'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
+    
+    # Heikin Ashi open is the average of the previous Heikin Ashi open and close
+    ha_df['ha_open'] = (df['open'].shift(1) + df['close'].shift(1)) / 2
+    
+    # The first Heikin Ashi open is just the open of the first candle
+    ha_df.iloc[0, ha_df.columns.get_loc('ha_open')] = df.iloc[0]['open']
+    
+    # Heikin Ashi high is the maximum of the high, Heikin Ashi open, and Heikin Ashi close
+    ha_df['ha_high'] = ha_df[['high', 'ha_open', 'ha_close']].max(axis=1)
+    
+    # Heikin Ashi low is the minimum of the low, Heikin Ashi open, and Heikin Ashi close
+    ha_df['ha_low'] = ha_df[['low', 'ha_open', 'ha_close']].min(axis=1)
+    
+    return ha_df
 
 def bar_up_dn_strategy(df):
-    df['previous_close'] = df['close'].shift(1)
-    df['bar_up'] = (df['close'] > df['open']) & (df['open'] > df['previous_close'])
-    df['bar_dn'] = (df['close'] < df['open']) & (df['open'] < df['previous_close'])  
-
+    df['previous_close'] = df['ha_close'].shift(1)
+    df['bar_up'] = (df['ha_close'] > df['ha_open']) & (df['ha_open'] > df['previous_close'])
+    df['bar_dn'] = (df['ha_close'] < df['ha_open']) & (df['ha_open'] < df['previous_close'])
     return df
-
-
-
 
 # buy and sell signals
 def place_orders(df):
-    global in_longPosition  # global in_longPosition
+    global in_longPosition_up, in_longPosition_down  # global in_longPosition
 
-    print(df.tail(2))  # print the last two rows of the data-frame
     last_row_index = len(df.index) - 1  # get the index of the last row
-    previous_row_index = last_row_index - 1  # get the index of the previous row
 
     # check account buying power
     account_info = rh.account.load_account_profile()
@@ -54,11 +71,9 @@ def place_orders(df):
     quantity_down = 0
     market_value_down = 0
 
-
     stock_quote_up = rh.get_stock_quote_by_symbol(ticker_up)
     stock_quote_down = rh.get_stock_quote_by_symbol(ticker_down)
 
-#   print(stock_positions)
     for item in stock_positions:
         if item['symbol'] == ticker_up:
             quantity_up = float(item['quantity'])
@@ -79,7 +94,9 @@ def place_orders(df):
     else:
         in_longPosition_down = False
 
-    if df['bar_up'][last_row_index]:
+    print(df[['timestamp', 'ha_open', 'ha_close', 'previous_close', 'bar_up', 'bar_dn']].tail(2))  # Debug print to check the conditions
+
+    if df['bar_up'].iloc[last_row_index]:
         print("Signal: Bar Up")
         if not in_longPosition_up:
             order_up = rh.order_buy_market(ticker_up, buying_power)
@@ -93,7 +110,7 @@ def place_orders(df):
             in_longPosition_down = False
         else:
             print("You are Long TQQQ, Making Money")
-    elif df['bar_dn'][last_row_index]:
+    elif df['bar_dn'].iloc[last_row_index]:
         print("Signal: Bar Down")
         if not in_longPosition_down:
             order_down = rh.order_buy_market(ticker_down, buying_power)
@@ -120,6 +137,7 @@ def run_bot():
         print("Invalid timestamp encountered. Please check the 'timestamp' column of your dataframe.")
         return  # Skip the rest of the function if an error occurs
 
+    df = heikin_ashi(df)  # calculate Heikin Ashi values
     df = bar_up_dn_strategy(df)  # apply the BarUpDn strategy
     place_orders(df)  # check for buy and sell signals
 
