@@ -20,7 +20,7 @@ login = rh.login('midielhg@gmail.com', 'nuGcej-famzoj-vafce1')
 
 long_ticker = "TQQQ"  # Example ticker for going up
 short_ticker = "SQQQ"  # Example ticker for going down
-amount_to_trade = float(100)  # Amount in USD to trade
+amount_to_trade = float(50)  # Amount in USD to trade
 
 
 # Initialize position flags
@@ -116,18 +116,16 @@ def place_orders(df):
 
     if df['bar_up'].iloc[last_row_index]:
         print("Signal: Bar Up")
-        # if not in_longPosition_up:
-        long_order = rh.orders.order( symbol      = long_ticker,
-                                    quantity      = long_quantity,
-                                    side          = "buy",
-                                    limitPrice    = long_last_trade_price,
-                                    extendedHours = True,
-                                    market_hours  = "extended_hours")
-        print("Buying ", long_ticker)
-        pprint.pprint(long_order)
-        in_longPosition_up = True
-            
-            
+        if not in_longPosition_up:
+            long_order = rh.orders.order( symbol      = long_ticker,
+                                        quantity      = long_quantity,
+                                        side          = "buy",
+                                        limitPrice    = long_last_trade_price,
+                                        extendedHours = True,
+                                        market_hours  = "extended_hours")
+            print("Buying ", long_ticker)
+            pprint.pprint(long_order)
+            in_longPosition_up = True  
         if in_longPosition_down:
             long_order = rh.orders.order( symbol       = short_ticker,
                                         quantity      = short_quantity,
