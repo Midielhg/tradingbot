@@ -9,3 +9,7 @@ intall the following packages
 
 run the following command to start the script
   python -u "/workspaces/Robinhood/BarUpDown.py"
+
+
+  
+python -u "c:\Users\Midiel\OneDrive\Desktop\tradingbot\BarUpDown.py"
