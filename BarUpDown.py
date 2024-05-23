@@ -20,12 +20,8 @@ login = rh.login('midielhg@gmail.com', 'nuGcej-famzoj-vafce1')
 
 long_ticker = "TQQQ"  # Example ticker for going up
 short_ticker = "SQQQ"  # Example ticker for going down
-amount_to_trade = float(50)  # Amount in USD to trade
+amount_to_trade = float(200)  # Amount in USD to trade
 
-
-# Initialize position flags
-in_longPosition_up = False
-in_longPosition_down = False
 
 def heikin_ashi(df):
     ha_df = df.copy()
@@ -55,15 +51,9 @@ def bar_up_dn_strategy(df):
 
 # buy and sell signals
 def place_orders(df):
-    global in_longPosition_up, in_longPosition_down  # global in_longPosition
+    global in_longPosition, in_shortPosition  # global in_longPosition
 
     last_row_index = len(df.index) - 1  # get the index of the last row
-
-    # check account buying power
-    account_info = rh.account.load_account_profile()
-    buying_power = float(account_info['buying_power'])
-    buying_power = buying_power - 1
-    print("Buying Power: $", buying_power)
 
     # Check positions for TQQQ and SQQQ
     stock_positions = rh.account.get_all_positions()
@@ -75,13 +65,20 @@ def place_orders(df):
     # get the last trade price for TQQQ and SQQQ and convert it to float
     long_last_trade_price = rh.stocks.get_latest_price(long_ticker)
     long_last_trade_price = float(long_last_trade_price[0])
+    long_ask_price = rh.stocks.get_stock_quote_by_symbol(long_ticker)
+    long_ask_price = float(long_ask_price['ask_price'])
+    long_bid_price = rh.stocks.get_stock_quote_by_symbol(long_ticker)
+    long_bid_price = float(long_bid_price['bid_price'])
+
     short_last_trade_price = rh.stocks.get_latest_price(short_ticker)
     short_last_trade_price = float(short_last_trade_price[0])
-    # print(long_last_trade_price)
-    # print(short_last_trade_price)
-    print("Last Price for", long_ticker, "is $", long_last_trade_price)
-    print("Last Price for", short_ticker, "is $", short_last_trade_price)
+    short_bid_price = rh.stocks.get_stock_quote_by_symbol(short_ticker)
+    short_bid_price = float(short_bid_price['bid_price'])
+    short_ask_price = rh.stocks.get_stock_quote_by_symbol(short_ticker)
+    short_ask_price = float(short_ask_price['ask_price'])
     
+    print(long_ticker, "Bid: $", long_bid_price, "Ask: $", long_ask_price, "Last: $", long_last_trade_price)
+    print(short_ticker, "Bid: $", short_bid_price, "Ask: $", short_ask_price, "Last: $", short_last_trade_price)
 
     # print the market value of the positions
     for item in stock_positions:
@@ -89,79 +86,111 @@ def place_orders(df):
             quantity_up = float(item['quantity'])
             market_value_long = float(item['quantity']) * long_last_trade_price
             if market_value_long >= 1:
-                in_longPosition_up = True
+                in_longPosition = True
                 print(long_ticker, "Market Value: $", float(market_value_long), "Quantity: ", int(quantity_up))
             else:
-                in_longPosition_up = False
+                in_longPosition = False
+                print("You are not in a Long Position")
         elif item['symbol'] == short_ticker:
             quantity_down = float(item['quantity'])
             market_value_short = float(item['quantity']) * short_last_trade_price
             if market_value_short >= 1:
-                in_longPosition_down = True
+                in_shortPosition = True
                 print(short_ticker, "Market Value: $", float(market_value_short), "Quantity: ", int(quantity_down))
             else:
-                in_longPosition_down = False
-                
+                in_shortPosition = False
+
     # calculate how many shares to buy with desire amount to trade (need to give a integer number without decimal)
     long_quantity = amount_to_trade / long_last_trade_price
     long_quantity = int(long_quantity)
-    print ("Able to buy", long_quantity, "shares of TQQQ")
+    # print ("Able to buy", long_quantity, "shares of TQQQ")
     short_quantity = amount_to_trade / short_last_trade_price
     short_quantity = int(short_quantity)
-    print ("Able to buy", short_quantity, "shares of SQQQ")
-    
-    
+    # print ("Able to buy", short_quantity, "shares of SQQQ")
+
     # print the last 2 rows of the data-frame
     print(df[['timestamp', 'ha_open', 'ha_close', 'previous_close', 'bar_up', 'bar_dn']].tail(2))  # Debug print to check the conditions
 
+    # get the instrument_id for TQQQ and SQQQ
+    long_instrument_id = rh.get_instruments_by_symbols(long_ticker)
+    long_instrument_id = long_instrument_id[0]['id']
+    short_instrument_id = rh.get_instruments_by_symbols(short_ticker)
+    short_instrument_id = short_instrument_id[0]['id']
+
+    # get the instrument_id of the open orders
+    pending_orders = rh.get_all_open_stock_orders()
+
     if df['bar_up'].iloc[last_row_index]:
         print("Signal: Bar Up")
-        if not in_longPosition_up:
-            long_order = rh.orders.order( symbol      = long_ticker,
-                                        quantity      = long_quantity,
-                                        side          = "buy",
-                                        limitPrice    = long_last_trade_price,
-                                        extendedHours = True,
-                                        market_hours  = "extended_hours")
-            print("Buying ", long_ticker)
-            pprint.pprint(long_order)
-            in_longPosition_up = True  
-        if in_longPosition_down:
-            long_order = rh.orders.order( symbol       = short_ticker,
-                                        quantity      = short_quantity,
-                                        side          = "sell",
-                                        limitPrice    = short_last_trade_price,
-                                        extendedHours = True,
-                                        market_hours  = "extended_hours")        
-            print("Selling", short_ticker)
-            pprint.pprint(short_order)
-            in_longPosition_down = False
+        if in_longPosition == False: # if not in_longPosition, buy TQQQ
+            print("You are not in a Long Position")
+            for order in pending_orders: # check if there is already an order for TQQQ
+                if 'instrument_id' in order and order['instrument_id'] == long_instrument_id: # if there is an order for TQQQ
+                    print("Order for", long_ticker, " already in pending orders")
+                    return
+            else:
+                # place order to buy TQQQ
+                long_order = rh.orders.order( symbol      = long_ticker,
+                                            quantity      = long_quantity,
+                                            side          = "buy",
+                                            limitPrice    = long_ask_price,
+                                            extendedHours = True,
+                                            market_hours  = "extended_hours") 
+                print("Buying ", long_ticker) # print the order
+                # pprint.pprint(long_order) # print the order
+            in_longPosition == True   # set in_longPosition to True
+        if in_shortPosition == True: # if in_longPosition is True, sell SQQQ
+            print("You are Long SQQQ")
+            for order in pending_orders: # check if there is already an order for SQQQ
+                if 'instrument_id' in order and order['instrument_id'] == short_instrument_id: # if there is an order for SQQQ
+                    print("Order for", short_ticker, " already in pending orders")
+            else: # place order to sell SQQQ
+                short_order = rh.orders.order( symbol       = short_ticker,
+                                    quantity      = short_quantity,
+                                    side          = "sell",
+                                    limitPrice    = short_bid_price,
+                                    extendedHours = True,
+                                    market_hours  = "extended_hours")        
+                print("Selling", short_ticker)
+                # pprint.pprint(short_order)
+            in_shortPosition = False
         else:
-            print("You are Long TQQQ, Making Money")
-    # elif df['bar_dn'].iloc[last_row_index]:
+            print("You are Long TQQQ,")
+
+    elif df['bar_dn'].iloc[last_row_index]:
         print("Signal: Bar Down")
-        if not in_longPosition_down:
-            short_order = rh.orders.order(  symbol        = short_ticker,
+        if in_shortPosition == False: # if not in_shortPosition, buy SQQQ
+            print("You are not in a Short Position")
+            for order in pending_orders: # check if there is already an order to Buy SQQQ
+                if 'instrument_id' in order and order['instrument_id'] == short_instrument_id: # if there is an order for SQQQ
+                    print("Order for", short_ticker, " already in pending orders")
+            else: # place order to buy SQQQ
+                short_order = rh.orders.order(  symbol        = short_ticker,
                                             quantity      = short_quantity,
                                             side          = "buy",
-                                            limitPrice    = short_last_trade_price,
+                                            limitPrice    = short_ask_price,
                                             extendedHours = True,
                                             market_hours  = "extended_hours")
-            print("Buying ", short_ticker)
-            pprint.pprint(short_order)
-            in_longPosition_down = True
-        if in_longPosition_up:
-            long_order = rh.orders.order(   symbol        = long_ticker,
-                                            quantity      = long_quantity,
-                                            side          = "sell",
-                                            limitPrice    = long_last_trade_price,
-                                            extendedHours = True,
-                                            market_hours  = "extended_hours")
-            print("Selling", long_ticker)
-            pprint.pprint(long_order)
-            in_longPosition_up = False
+                print("Buying ", short_ticker)
+                # pprint.pprint(short_order)
+            in_shortPosition = True
+        if in_longPosition == True: # if in_longPosition is True, sell TQQQ
+            print("You are Long TQQQ")
+            for order in pending_orders:# check if there is already an order to Sell TQQQ
+                if 'instrument_id' in order and order['instrument_id'] == long_instrument_id: # if there is an order for TQQQ
+                    print("Order for", long_ticker, " already in pending orders")
+            else: # place order to sell TQQQ
+                long_order = rh.orders.order(   symbol        = long_ticker,
+                                                quantity      = long_quantity,
+                                                side          = "sell",
+                                                limitPrice    = long_bid_price,
+                                                extendedHours = True,
+                                                market_hours  = "extended_hours")
+                print("Selling", long_ticker)
+                # pprint.pprint(long_order)
+            in_longPosition = False
         else:
-            print("You are Long SQQQ, Making Money")
+            print("You are Long SQQQ")
 
 # Run the bot
 def run_bot():
@@ -174,11 +203,10 @@ def run_bot():
     except FloatingPointError:
         print("Invalid timestamp encountered. Please check the 'timestamp' column of your dataframe.")
         return  # Skip the rest of the function if an error occurs
-
+    
     df = heikin_ashi(df)  # calculate Heikin Ashi values
     df = bar_up_dn_strategy(df)  # apply the BarUpDn strategy
     place_orders(df)  # check for buy and sell signals
-
 schedule.every(3).seconds.do(run_bot)  # run the bot every 3 seconds
 
 while True:
