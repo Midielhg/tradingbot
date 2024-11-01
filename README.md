@@ -1,5 +1,6 @@
 # Setup 
 intall the following packages
+  python3 -m pip install --upgrade pip
   pip install webull
   pip install robin_stocks
   pip install schedule
