@@ -14,3 +14,18 @@ run the following command to start the script
 
   
 python -u "c:\Users\Midiel\OneDrive\Desktop\tradingbot\BarUpDown.py"
+
+
+
+
+
+
+Solution for "Extended hours and market hours mismatch."
+
+
+robin_stocks.robinhood.orders.order(symbol        = "DIS",
+                                    quantity      = 1,
+                                    side          = "buy",
+                                    limitPrice    = 91.02,
+                                    extendedHours = True,
+                                    market_hours  = "extended_hours")

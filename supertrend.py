@@ -16,17 +16,23 @@ import robin_stocks as rb
 wb = webull()
 import pprint
 
-login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce1')
+login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce12')
 
-ticker = "DOGE"
-asset = "crypto"
+print("Welcome Back")
 
-
+ticker = "TQQQ"
+asset = "stock"
 #supper trend parameters
 period = 10
 factor = 3
 
+# check account buying power
+account_info = rh.account.load_account_profile()
+buying_power = float(account_info['buying_power'])
+buying_power = buying_power - 1
+print("Your Buying Power is: $", buying_power)
 
+investMoney = input("How much money do you want to trade with?")
 
 
 #indicators
@@ -80,7 +86,7 @@ def place_orders(df):
     previous_row_index = last_row_index - 1 #get the index of the previous row
 
 
-    # check account buying powet
+    # check account buying power
     account_info = rh.account.load_account_profile()
     buying_power = float(account_info['buying_power'])
     buying_power = buying_power - 1
