@@ -1,11 +1,12 @@
 # Setup 
 intall the following packages
-  python3 -m pip install --upgrade pip
-  pip install webull
-  pip install robin_stocks
-  pip install schedule
-  git clone https://github.com/jmfernandes/robin_stocks.git >>> cd robin_stocks
-  pip install .
+python3 -m pip install --upgrade pip
+pip install webull
+pip install robin_stocks
+pip install schedule
+git clone https://github.com/jmfernandes/robin_stocks.git 
+>>> cd robin_stocks
+pip install .
 
 
 run the following command to start the script
@@ -29,3 +30,5 @@ robin_stocks.robinhood.orders.order(symbol        = "DIS",
                                     limitPrice    = 91.02,
                                     extendedHours = True,
                                     market_hours  = "extended_hours")
+
+install flash

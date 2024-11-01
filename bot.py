@@ -178,9 +178,10 @@ def run_bot():
     supertrend(df, period, factor) #calculate the supertrend indicator
     place_orders(df)#check for buy and sell signals 
 
-schedule.every(3).seconds.do(run_bot) #run the bot every 3 seconds
+def start_bot():
+    schedule.every(3).seconds.do(run_bot) #run the bot every 3 seconds
 
-while True:
-    
-    schedule.run_pending() #run the scheduled tasks
-    time.sleep(1) #wait 1 second
+    while True:
+        
+        schedule.run_pending() #run the scheduled tasks
+        time.sleep(1) #wait 1 second
