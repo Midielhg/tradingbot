@@ -26,7 +26,7 @@ asset = "stock"
 #supper trend parameters
 period = 10
 factor = 3
-tradeAmount = 81
+tradeAmount = 300
 shares_ownerd = 0
 market_value = 0
 
@@ -76,12 +76,14 @@ def supertrend(df, period, atr_multiplier): #supertrend
 def place_orders(df):
     global in_longPosition #global in_longPosition
     
-    print(df.tail(2)) #print the last 2 rows of the dataframe
+    print(df.tail(3)) #print the last 2 rows of the dataframe
     last_row_index = len(df.index) - 1 #get the index of the last row
     previous_row_index = last_row_index - 1 #get the index of the previous row
     
 
     stock_positions = rh.account.get_all_positions()
+
+
     stock_quote = rh.get_stock_quote_by_symbol(ticker)
     
 
@@ -108,6 +110,9 @@ def place_orders(df):
     else:
         in_longPosition = False 
 
+    print("last_row_index", last_row_index['in_uptrend'])
+
+    # if not df['in_uptrend'][previous_row_index] and df['in_uptrend'][last_row_index]: #if the previous row was not in an uptrend and the last row is in an uptrend
     if df['in_uptrend'][last_row_index]:
         # Define the variable "buying_power"
         print("Current Trend: UpTrend")
@@ -121,8 +126,9 @@ def place_orders(df):
     else:
         print("Current Trend: DownTrend")
         if in_longPosition == True:
-            order = rh.orders.order(ticker,shares_ownerd, "sell", extendedHours = True,jsonify=True, market_hours  = "extended_hours",)
+            order = rh.orders.order(ticker,shares_ownerd, "sell", extendedHours = True,jsonify=True, market_hours  = "extended_hours")
             print("Selling",shares_ownerd, ticker)
+            pprint.pprint(order)
             in_longPosition = False
         else:
             print("You don't have an open position, Saving Money on downtrend")
@@ -142,7 +148,7 @@ def run_bot():
     supertrend(df, period, factor) #calculate the supertrend indicator
     place_orders(df)#check for buy and sell signals 
 
-schedule.every(3).seconds.do(run_bot) #run the bot every 3 seconds
+schedule.every(5).seconds.do(run_bot) #run the bot every 3 seconds
 
 while True:
     
