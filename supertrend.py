@@ -15,6 +15,8 @@ import pyotp
 import robin_stocks as rb
 wb = webull()
 import pprint
+from datetime import datetime, time as dtime
+import time
 
 login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce12')
 
@@ -29,6 +31,10 @@ factor = 3
 tradeAmount = 300
 shares_ownerd = 0
 market_value = 0
+
+# Define Trading Hours (9:30 AM to 4:00 PM)
+market_open = dtime(9, 30)
+market_close = dtime(16, 0)
 
 #indicators to calculate Supertrend
 def tr(data):#true range
@@ -76,14 +82,12 @@ def supertrend(df, period, atr_multiplier): #supertrend
 def place_orders(df):
     global in_longPosition #global in_longPosition
     
-    print(df.tail(3)) #print the last 2 rows of the dataframe
+    print(df.tail(4)) #print the last 2 rows of the dataframe
     last_row_index = len(df.index) - 1 #get the index of the last row
     previous_row_index = last_row_index - 1 #get the index of the previous row
     
 
     stock_positions = rh.account.get_all_positions()
-
-
     stock_quote = rh.get_stock_quote_by_symbol(ticker)
     
 
@@ -110,7 +114,7 @@ def place_orders(df):
     else:
         in_longPosition = False 
 
-    print("last_row_index", last_row_index['in_uptrend'])
+    # print("last_row_index", last_row_index['in_uptrend'])
 
     # if not df['in_uptrend'][previous_row_index] and df['in_uptrend'][last_row_index]: #if the previous row was not in an uptrend and the last row is in an uptrend
     if df['in_uptrend'][last_row_index]:
@@ -133,22 +137,48 @@ def place_orders(df):
         else:
             print("You don't have an open position, Saving Money on downtrend")
 
+# Check if current time is within trading hours
+def within_trading_hours():
+    current_time = datetime.now().time()
+    return market_open <= current_time <= market_close
+
+# Close all open positions before market closes
+def close_all_positions():
+    global in_longPosition
+    stock_positions = rh.account.get_all_positions()
+    
+    for item in stock_positions:
+        if item['symbol'] == ticker:
+            shares_ownerd = float(item['quantity'])
+            if shares_ownerd > 0:
+                order = rh.orders.order(ticker, shares_ownerd, "sell", extendedHours=True)
+                print(f"Closing all positions by selling {shares_ownerd} shares of {ticker}")
+                pprint.pprint(order)
+                in_longPosition = False
+
 #Run the bot  
 def run_bot():
-    print(f"\nFetching new bars for {datetime.now().isoformat()}")
-    bars = wb.get_bars(stock=ticker, interval='m1', count=100, extendTrading=1) #get the last 100 bars of TQQQ at 1 minute intervals
-    df = pd.DataFrame(bars[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']) #convert the fetched data into a pandas data-frame
-    
-    try:
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms') #convert the timestamp data to datetime format
-    except FloatingPointError:
-        print("Invalid timestamp encountered. Please check the 'timestamp' column of your dataframe.")
-        return  # Skip the rest of the function if an error occurs
+    if within_trading_hours():
+        print(f"\nFetching new bars for {datetime.now().isoformat()}")
+        bars = wb.get_bars(stock=ticker, interval='m1', count=100, extendTrading=1)
+        df = pd.DataFrame(bars[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
-    supertrend(df, period, factor) #calculate the supertrend indicator
-    place_orders(df)#check for buy and sell signals 
+        try:
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        except FloatingPointError:
+            print("Invalid timestamp encountered.")
+            return
+
+        supertrend(df, period, factor)
+        place_orders(df)
+    else:
+        print("Outside trading hours. No trades will be placed.")
 
 schedule.every(5).seconds.do(run_bot) #run the bot every 3 seconds
+
+# Schedule position close at 3:59 PM
+schedule.every().day.at("15:59").do(close_all_positions)
+
 
 while True:
     
