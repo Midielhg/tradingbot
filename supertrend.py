@@ -26,7 +26,9 @@ asset = "stock"
 #supper trend parameters
 period = 10
 factor = 3
-tradeAmount = 200
+tradeAmount = 81
+shares_ownerd = 0
+market_value = 0
 
 #indicators to calculate Supertrend
 def tr(data):#true range
@@ -79,89 +81,51 @@ def place_orders(df):
     previous_row_index = last_row_index - 1 #get the index of the previous row
     
 
+    stock_positions = rh.account.get_all_positions()
+    stock_quote = rh.get_stock_quote_by_symbol(ticker)
     
-#place orders if asset is stocks 
-    if asset == "stock":
-        stock_positions = rh.account.get_all_positions()
-        stock_quote = rh.get_stock_quote_by_symbol(ticker)
-        quantity = 0
-        market_value = 0
-        for item in stock_positions:
-            if item['symbol'] == ticker:
-                quantity = float(item['quantity'])
-                print("You own ", quantity, "shares of ", ticker)
-                market_value = float(item['quantity']) * float(stock_quote['last_trade_price'])
-                print(ticker, "Market Value: $", float(market_value))
 
+    for item in stock_positions:
+        if item['symbol'] == ticker:
+            shares_ownerd = float(item['quantity'])
+            market_value = float(item['quantity']) * float(stock_quote['last_trade_price'])
+            print("\nYou own ", int(shares_ownerd), "shares of ", ticker, " with a Market Value of: $", float(market_value))
 
-        shares_to_trade = int(tradeAmount // float(stock_quote['last_trade_price']))
-        print("You can trade: ", shares_to_trade, " shares")
+    bid_price = float(stock_quote['bid_price'])
+    ask_price = float(stock_quote['ask_price'])
 
+    shares_to_trade = int(tradeAmount // float(stock_quote['last_trade_price']))
+    print("You can trade with ", shares_to_trade, " shares")
 
+    if shares_ownerd > shares_to_trade:
+        print("You own more share than the ones that you were willing to trade with. Selling some:")
+        extra_shares = shares_ownerd - shares_to_trade
+        rh.orders.order(ticker,extra_shares, "sell", extendedHours = True,jsonify=True, market_hours  = "extended_hours",)
+        print("Selling ",extra_shares, " extra shares of ", ticker )
 
-        if market_value >= 1:
-            in_longPosition = True
+    if market_value >= 1:
+        in_longPosition = True
+    else:
+        in_longPosition = False 
+
+    if df['in_uptrend'][last_row_index]:
+        # Define the variable "buying_power"
+        print("Current Trend: UpTrend")
+        if in_longPosition == False:
+            order = rh.order_buy_market(ticker, shares_to_trade)
+            print("Opening ", ticker, " position")
+            pprint.pprint(order)
+            in_longPosition = True  
         else:
-            in_longPosition = False 
-
-        if df['in_uptrend'][last_row_index]:
-            # Define the variable "buying_power"
-            print("Current Trend: UpTrend")
-            if in_longPosition == False:
-                order = rh.order_buy_market(ticker, shares_to_trade)
-                print("Buying ", ticker)
-                pprint.pprint(order)
-                in_longPosition = True  
-            else:
-                print("You are Long, Making Money")
+            print("You are Long, Making Money")
+    else:
+        print("Current Trend: DownTrend")
+        if in_longPosition == True:
+            order = rh.orders.order(ticker,shares_ownerd, "sell", extendedHours = True,jsonify=True, market_hours  = "extended_hours",)
+            print("Selling",shares_ownerd, ticker)
+            in_longPosition = False
         else:
-            print("Current Trend: DownTrend")
-            if in_longPosition == True:
-                order = rh.orders.order(ticker,quantity, "sell", extendedHours = True, market_hours  = "extended_hours")
-                print("Selling",quantity, ticker)
-                pprint.pprint(order)
-                in_longPosition = False
-            else:
-                print("You don't have an open position, Saving Money")
-# place orders if asset is crypto
-# NEVER USE THIS CRYPTO TRADDING, UNLESS YOU MODIFY THE CODE FOR A LONGER PERIOD, robinhood keeps a lot from each trade
-    elif asset == "crypto":
-        crypto_positions = rh.get_crypto_positions()
-        crypto_quote = rh.get_crypto_quote(ticker)
-        quantity = 0
-        market_value = 0
-        for item in crypto_positions:
-            if item['currency']['code'] == ticker:
-                quantity = float(item['quantity'])
-                # market_value = quantity * price
-                market_value = float(item['quantity']) * float(crypto_quote['mark_price'])
-                print("Crypto Market Value: $", float(market_value))
-
-        # print if in long position
-        if market_value >= 1:
-            in_longPosition = True
-        else:
-            in_longPosition = False 
-
-        if df['in_uptrend'][last_row_index]:
-            # Define the variable "buying_power"
-            print("Current Trend: UpTrend")
-            if in_longPosition == False:
-                order = rh.order_buy_crypto_by_price(ticker, shares_to_trade, timeInForce='gtc')
-                print("Buying ", ticker)
-                pprint.pprint(order)
-                in_longPosition = True  
-            else:
-                print("You are Long, Making Money")
-        else:
-            print("Current Trend: DownTrend")
-            if in_longPosition == True:
-                order = rh.order_sell_crypto_by_quantity(ticker, quantity, timeInForce='gtc')
-                print("Selling",quantity, ticker)
-                pprint.pprint(order)
-                in_longPosition = False
-            else:
-                print("You don't have an open position, Saving Money")
+            print("You don't have an open position, Saving Money on downtrend")
 
 #Run the bot  
 def run_bot():

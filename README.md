@@ -1,4 +1,8 @@
 # Setup 
+
+pip install -r requirements.txt
+
+
 intall the following packages
 python3 -m pip install --upgrade pip
 pip install webull

@@ -1,0 +1,7 @@
+Flask==2.2.5
+pandas==1.5.3
+numpy==1.24.2
+schedule==1.1.0
+robin-stocks==1.5.0
+pyotp==2.8.0
+webull==0.2.5
