@@ -3,22 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Bot Control</title>
-</head>
-<body>
-    <h1>Welcome to the Trading Bot Interface</h1>
-    <button onclick="startBot()">Start Bot</button>
-
+    <title>SuperTrend Bot Control</title>
     <script>
         function startBot() {
-            fetch('/start_bot', {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-            });
+            fetch('/start-bot', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => alert(data.status))
+                .catch(error => alert("Error: " + error));
+        }
+
+        function stopBot() {
+            fetch('/stop-bot', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => alert(data.status))
+                .catch(error => alert("Error: " + error));
         }
     </script>
+</head>
+<body>
+    <h1>SuperTrend Bot Control</h1>
+    <button onclick="startBot()">Start Bot</button>
+    <button onclick="stopBot()">Stop Bot</button>
 </body>
 </html>
