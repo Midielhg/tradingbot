@@ -1,42 +1,37 @@
 from webull import webull
-import json
 import schedule
 import pandas as pd
 pd.set_option('display.max_rows', None)
 import warnings
 warnings.filterwarnings('ignore')
-import numpy as np
-from datetime import datetime
 import time
 import robin_stocks.robinhood as rh
-import sys
-import os
-import pyotp
-import robin_stocks as rb
 wb = webull()
 import pprint
 from datetime import datetime, time as dtime
-import time
 
-login = rh.login('midielhg@gmail.com','nuGcej-famzoj-vafce12')
-
-print("Welcome Back to the SupperTrend Bot")
+# Initialize Webull and Robinhood
+wb = webull()
+login = rh.login('midielhg@gmail.com', 'nuGcej-famzoj-vafce12')
+print("Welcome Back to the SuperTrend Bot")
 
 ticker = "TQQQ"
 inverseTicker = "SQQQ"
 asset = "stock"
-#supper trend parameters
+
+# Bot Configuration
+ticker = "TQQQ"
+inverseTicker = "SQQQ"
 period = 10
 factor = 3
 tradeAmount = 300
-shares_ownerd = 0
 market_value = 0
 
 # Define Trading Hours (9:30 AM to 4:00 PM)
 market_open = dtime(9, 30)
 market_close = dtime(16, 0)
 
-#indicators to calculate Supertrend
+#indicators funtions to calculate Supertrend
 def tr(data):#true range
     data['previous_close'] = data['close'].shift(1)
     data['high-low'] = abs(data['high'] - data['low'])
@@ -83,22 +78,17 @@ def place_orders(df):
     global in_longPosition #global in_longPosition
     
     print(df.tail(4)) #print the last 2 rows of the dataframe
-    last_row_index = len(df.index) - 1 #get the index of the last row
-    previous_row_index = last_row_index - 1 #get the index of the previous row
     
-
+    global in_longPosition
     stock_positions = rh.account.get_all_positions()
     stock_quote = rh.get_stock_quote_by_symbol(ticker)
     
-
+    shares_ownerd = 0
     for item in stock_positions:
         if item['symbol'] == ticker:
             shares_ownerd = float(item['quantity'])
-            market_value = float(item['quantity']) * float(stock_quote['last_trade_price'])
+            market_value = shares_ownerd * float(stock_quote['last_trade_price'])
             print("\nYou own ", int(shares_ownerd), "shares of ", ticker, " with a Market Value of: $", float(market_value))
-
-    bid_price = float(stock_quote['bid_price'])
-    ask_price = float(stock_quote['ask_price'])
 
     shares_to_trade = int(tradeAmount // float(stock_quote['last_trade_price']))
     print("You can trade with ", shares_to_trade, " shares")
@@ -109,33 +99,27 @@ def place_orders(df):
         rh.orders.order(ticker,extra_shares, "sell", extendedHours = True,jsonify=True, market_hours  = "extended_hours",)
         print("Selling ",extra_shares, " extra shares of ", ticker )
 
-    if market_value >= 1:
-        in_longPosition = True
-    else:
-        in_longPosition = False 
+    in_longPosition = market_value >= 1
 
-    # print("last_row_index", last_row_index['in_uptrend'])
-
-    # if not df['in_uptrend'][previous_row_index] and df['in_uptrend'][last_row_index]: #if the previous row was not in an uptrend and the last row is in an uptrend
+    last_row_index = len(df.index) - 1 #get the index of the last row
     if df['in_uptrend'][last_row_index]:
-        # Define the variable "buying_power"
         print("Current Trend: UpTrend")
-        if in_longPosition == False:
+        if not in_longPosition:
             order = rh.order_buy_market(ticker, shares_to_trade)
-            print("Opening ", ticker, " position")
+            print(f"Opening {ticker} position")
             pprint.pprint(order)
             in_longPosition = True  
         else:
-            print("You are Long, Making Money")
+            print("Already Long, Making Money")
     else:
         print("Current Trend: DownTrend")
-        if in_longPosition == True:
-            order = rh.orders.order(ticker,shares_ownerd, "sell", extendedHours = True,jsonify=True, market_hours  = "extended_hours")
-            print("Selling",shares_ownerd, ticker)
+        if in_longPosition:
+            order = rh.orders.order(ticker, shares_ownerd, "sell", extendedHours=True)
+            print(f"Selling {shares_ownerd} shares of {ticker}")
             pprint.pprint(order)
             in_longPosition = False
         else:
-            print("You don't have an open position, Saving Money on downtrend")
+            print("No position open, Saving Money on downtrend")
 
 # Check if current time is within trading hours
 def within_trading_hours():
