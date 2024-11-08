@@ -24,7 +24,7 @@ ticker = "TQQQ"
 inverseTicker = "SQQQ"
 period = 10
 factor = 3
-tradeAmount = 300
+tradeAmount = 550
 market_value = 0
 
 # Define Trading Hours (9:30 AM to 4:00 PM)
@@ -75,51 +75,60 @@ def supertrend(df, period, atr_multiplier): #supertrend
 
 #buy and sell signals
 def place_orders(df):
-    global in_longPosition #global in_longPosition
-    
     print(df.tail(4)) #print the last 2 rows of the dataframe
-    
-    global in_longPosition
-    stock_positions = rh.account.get_all_positions()
-    stock_quote = rh.get_stock_quote_by_symbol(ticker)
-    
-    shares_ownerd = 0
-    for item in stock_positions:
-        if item['symbol'] == ticker:
-            shares_ownerd = float(item['quantity'])
-            market_value = shares_ownerd * float(stock_quote['last_trade_price'])
-            print("\nYou own ", int(shares_ownerd), "shares of ", ticker, " with a Market Value of: $", float(market_value))
-
-    shares_to_trade = int(tradeAmount // float(stock_quote['last_trade_price']))
-    print("You can trade with ", shares_to_trade, " shares")
-
-    if shares_ownerd > shares_to_trade:
-        print("You own more share than the ones that you were willing to trade with. Selling some:")
-        extra_shares = shares_ownerd - shares_to_trade
-        rh.orders.order(ticker,extra_shares, "sell", extendedHours = True,jsonify=True, market_hours  = "extended_hours",)
-        print("Selling ",extra_shares, " extra shares of ", ticker )
-
-    in_longPosition = market_value >= 1
-
-    last_row_index = len(df.index) - 1 #get the index of the last row
-    if df['in_uptrend'][last_row_index]:
-        print("Current Trend: UpTrend")
-        if not in_longPosition:
-            order = rh.order_buy_market(ticker, shares_to_trade)
-            print(f"Opening {ticker} position")
-            pprint.pprint(order)
-            in_longPosition = True  
-        else:
-            print("Already Long, Making Money")
+    if not within_trading_hours():
+        print("Outside trading hours. No trades will be placed.")
+        return
     else:
-        print("Current Trend: DownTrend")
-        if in_longPosition:
-            order = rh.orders.order(ticker, shares_ownerd, "sell", extendedHours=True)
-            print(f"Selling {shares_ownerd} shares of {ticker}")
-            pprint.pprint(order)
-            in_longPosition = False
+        global in_longPosition
+        stock_positions = rh.account.get_all_positions()
+        stock_quote = rh.get_stock_quote_by_symbol(ticker)
+   
+        shares_ownerd = 0
+        for item in stock_positions:
+            if item['symbol'] == ticker:
+                shares_ownerd = float(item['quantity'])
+                market_value = shares_ownerd * float(stock_quote['last_trade_price'])
+                print("\nYou own ", int(shares_ownerd), "shares of ", ticker, " with a Market Value of: $", float(market_value))
+
+        shares_to_trade = int(tradeAmount // float(stock_quote['last_trade_price']))
+        print("You can trade with ", shares_to_trade, " shares")
+
+        if shares_ownerd > shares_to_trade:
+            print("You own more share than the ones that you were willing to trade with. Selling some:")
+            extra_shares = shares_ownerd - shares_to_trade
+            order = rh.orders.order(symbol        = ticker,
+                        quantity      = shares_ownerd,
+                        side          = "sell",
+                        extendedHours = True,
+                        market_hours  = "extended_hours")
+            print("Selling ",extra_shares, " extra shares of ", ticker )
+
+        in_longPosition = market_value >= 1
+
+        last_row_index = len(df.index) - 1 #get the index of the last row
+        if df['in_uptrend'][last_row_index]:
+            print("Current Trend: UpTrend")
+            if not in_longPosition:
+                order = rh.order_buy_market(ticker, shares_to_trade)
+                print(f"Opening {ticker} position")
+                pprint.pprint(order)
+                in_longPosition = True  
+            else:
+                print("Already Long, Making Money")
         else:
-            print("No position open, Saving Money on downtrend")
+            print("Current Trend: DownTrend")
+            if in_longPosition:
+                order = rh.orders.order(symbol        = ticker,
+                                        quantity      = shares_ownerd,
+                                        side          = "sell",
+                                        extendedHours = True,
+                                        market_hours  = "extended_hours")
+                print(f"Selling {shares_ownerd} shares of {ticker}")
+                pprint.pprint(order)
+                in_longPosition = False
+            else:
+                print("No position open, Saving Money on downtrend")
 
 # Check if current time is within trading hours
 def within_trading_hours():
@@ -130,41 +139,39 @@ def within_trading_hours():
 def close_all_positions():
     global in_longPosition
     stock_positions = rh.account.get_all_positions()
-    
+
     for item in stock_positions:
         if item['symbol'] == ticker:
             shares_ownerd = float(item['quantity'])
             if shares_ownerd > 0:
-                order = rh.orders.order(ticker, shares_ownerd, "sell", extendedHours=True)
+                order = rh.orders.order(symbol        = ticker,
+                        quantity      = shares_ownerd,
+                        side          = "sell",
+                        extendedHours = True,
+                        market_hours  = "extended_hours")
                 print(f"Closing all positions by selling {shares_ownerd} shares of {ticker}")
                 pprint.pprint(order)
                 in_longPosition = False
 
 #Run the bot  
 def run_bot():
-    if within_trading_hours():
-        print(f"\nFetching new bars for {datetime.now().isoformat()}")
-        bars = wb.get_bars(stock=ticker, interval='m1', count=100, extendTrading=1)
-        df = pd.DataFrame(bars[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    print(f"\nFetching new bars for {datetime.now().isoformat()}")
+    bars = wb.get_bars(stock=ticker, interval='m1', count=100, extendTrading=1)
+    df = pd.DataFrame(bars[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
-        try:
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        except FloatingPointError:
-            print("Invalid timestamp encountered.")
-            return
-
-        supertrend(df, period, factor)
-        place_orders(df)
-    else:
-        print("Outside trading hours. No trades will be placed.")
+    try:
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    except FloatingPointError:
+        print("Invalid timestamp encountered.")
+        return
+    supertrend(df, period, factor)
+    place_orders(df)
 
 schedule.every(5).seconds.do(run_bot) #run the bot every 3 seconds
 
 # Schedule position close at 3:59 PM
 schedule.every().day.at("15:59").do(close_all_positions)
 
-
 while True:
-    
     schedule.run_pending() #run the scheduled tasks
     time.sleep(1) #wait 1 second
