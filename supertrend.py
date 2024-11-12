@@ -22,8 +22,8 @@ asset = "stock"
 # Bot Configuration
 ticker = "TQQQ"
 inverseTicker = "SQQQ"
-period = 10
-factor = 3
+period = 5
+factor = 2
 tradeAmount = 550
 market_value = 0
 
