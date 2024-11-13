@@ -200,7 +200,7 @@ def close_all_positions():
                 print(order)
                 in_short_position = False
 
-#Run the bot  
+# Run the bot  
 def run_bot():
     print(f"\nFetching new bars for {datetime.now().isoformat()}")
     bars = wb.get_bars(stock=ticker, interval='m1', count=100, extendTrading=1)
@@ -213,7 +213,7 @@ def run_bot():
     supertrend(df, period, factor)
     place_orders(df)
 
-schedule.every(5).seconds.do(run_bot) #run the bot every 3 seconds
+schedule.every(5).seconds.do(run_bot) #run the bot every 5 seconds
 
 # Schedule position close at 3:59 PM
 schedule.every().day.at("15:59").do(close_all_positions)

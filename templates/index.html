@@ -1,10 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperTrend Bot Control</title>
+    <!-- ...existing code... -->
+    <title>Robinbot</title>
+    <!-- Link to the style.css file -->
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Add Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        let chart;
+
         function startBot() {
             fetch('/start-bot', { method: 'POST' })
                 .then(response => response.json())
@@ -18,11 +23,79 @@
                 .then(data => alert(data.status))
                 .catch(error => alert("Error: " + error));
         }
+
+        function fetchLogs() {
+            fetch('/logs')
+                .then(response => response.json())
+                .then(data => {
+                    const logContainer = document.getElementById('log-container');
+                    logContainer.innerHTML = data.logs.join('<br>');
+                    const terminalOutput = document.getElementById('terminal-output');
+                    terminalOutput.innerHTML = data.logs.join('<br>');
+                })
+                .catch(error => console.error("Error fetching logs: ", error));
+        }
+
+        function fetchChartData() {
+            fetch('/chart-data')
+                .then(response => response.json())
+                .then(data => {
+                    const ctx = document.getElementById('tickerChart').getContext('2d');
+                    if (!chart) {
+                        chart = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: data.timestamps,
+                                datasets: [{
+                                    label: 'Ticker Price',
+                                    data: data.prices,
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    borderWidth: 1,
+                                    fill: false
+                                }]
+                            },
+                            options: {
+                                scales: {
+                                    x: {
+                                        type: 'time',
+                                        time: {
+                                            unit: 'minute'
+                                        }
+                                    },
+                                    y: {
+                                        beginAtZero: false
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        chart.data.labels = data.timestamps;
+                        chart.data.datasets[0].data = data.prices;
+                        chart.update();
+                    }
+                })
+                .catch(error => console.error("Error fetching chart data: ", error));
+        }
+
+        setInterval(fetchLogs, 5000); // Fetch logs every 5 seconds
+        setInterval(fetchChartData, 60000); // Fetch chart data every minute
     </script>
 </head>
 <body>
-    <h1>SuperTrend Bot Control</h1>
-    <button onclick="startBot()">Start Bot</button>
-    <button onclick="stopBot()">Stop Bot</button>
+    <header>
+        <h1>Robinbot</h1>
+    </header>
+    <div class="container">
+        <div class="bot-control">
+            <button class="start-btn" onclick="startBot()">Start Bot</button>
+            <button class="stop-btn" onclick="stopBot()">Stop Bot</button>
+        </div>
+        <div id="log-container" class="log-container"></div>
+        <div id="terminal-output" class="terminal-output"></div> <!-- New terminal output div -->
+        <canvas id="tickerChart" width="400" height="200"></canvas> <!-- New chart canvas -->
+    </div>
+    <footer>
+        <p>&copy; 2023 TradingBot. All rights reserved.</p>
+    </footer>
 </body>
 </html>
