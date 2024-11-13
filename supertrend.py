@@ -17,10 +17,10 @@ print("Welcome Back to the SuperTrend Bot")
 
 # Bot Configuration
 ticker = "TQQQ"
-inverse_ticker = "SQQQ"
-period = 5
-factor = 2
-trade_amount = 5000
+inverseTicker = "SQQQ"
+period = 10
+factor = 3
+tradeAmount = 550
 market_value = 0
 
 # Define Trading Hours (9:30 AM to 4:00 PM)
