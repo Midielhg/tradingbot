@@ -72,98 +72,127 @@ def supertrend(df, period, atr_multiplier): #supertrend
 #buy and sell signals
 def place_orders(df):
     print(df.tail(2)) #print the last 2 rows of the dataframe
-    if not within_trading_hours():
-        print("Outside trading hours. No trades will be placed.")
-        return
+    # if not within_trading_hours():
+    #     print("Outside trading hours. No trades will be placed.")
+    #     return
+# else:
+    global in_long_position
+    stock_positions = rh.account.get_all_positions()
+    stock_quote = rh.get_stock_quote_by_symbol(ticker)
+    inverse_stock_quote = rh.get_stock_quote_by_symbol(inverse_ticker)
+    
+    shares_owned = 0
+    for item in stock_positions:
+        if item['symbol'] == ticker:
+            shares_owned = float(item['quantity'])
+            market_value = shares_owned * float(stock_quote['last_trade_price'])
+            #ticker trail amount = 0.02% of the last trade price
+            ticker_trail_amount = round(float(stock_quote['last_trade_price']) * 0.0002, 3)
+              
+            if shares_owned > 0:
+                print("\nYou own ", int(shares_owned), "shares of ", ticker, " with a Market Value of: $", float(market_value))
+        elif item['symbol'] == inverse_ticker:
+            inverse_shares_owned = float(item['quantity'])
+            inverse_market_value = inverse_shares_owned * float(stock_quote['last_trade_price'])
+            inverse_ticker_trail_amount = round(float(inverse_stock_quote['last_trade_price']) * 0.0002, 3)
+            if inverse_shares_owned:
+                print("\nYou own ", int(inverse_shares_owned), "shares of ", inverse_ticker, " with a Market Value of: $", float(inverse_market_value))
+    
+    shares_to_trade = int(trade_amount // float(stock_quote['last_trade_price']))
+    inverse_shares_to_trade = int(trade_amount // float(inverse_stock_quote['last_trade_price']))
+    
+    if shares_owned > shares_to_trade:
+        print("You own more share than the ones that you were willing to trade with. Selling some:")
+        extra_shares = shares_owned - shares_to_trade
+        rh.orders.order(symbol        = ticker,
+                        quantity      = shares_owned,
+                        side          = "sell",
+                        extendedHours = True,
+                        market_hours  = "extended_hours")
+        print("Selling ",extra_shares, " extra shares of ", ticker )
+    if inverse_shares_owned > inverse_shares_to_trade:
+        print("You own more share than the ones that you were willing to trade with. Selling some:")
+        inverse_extra_shares = inverse_shares_owned - inverse_shares_to_trade
+        rh.orders.order(symbol        = inverse_ticker,
+                        quantity      = inverse_shares_owned,
+                        side          = "sell",
+                        extendedHours = True,
+                        market_hours  = "extended_hours")
+        print("Selling ",inverse_extra_shares, " extra shares of ", inverse_ticker )
+    
+    in_long_position = market_value >= 1
+    in_short_position = inverse_market_value >=1
+    
+    
+    
+    last_row_index = len(df.index) - 1 #get the index of the last row
+    if df['in_uptrend'][last_row_index]:
+        print("Current Trend: UpTrend")
+        print("You can trade with ", shares_to_trade, " shares")
+        if not in_long_position:
+            order = rh.orders.order(symbol        = ticker,
+                                    quantity      = shares_to_trade,
+                                    side          = "buy",
+                                    extendedHours = True,
+                                    market_hours  = "extended_hours")                
+            print(f"Opening {ticker} position")
+            print(order)
+            in_long_position = True  
+            trailing_stop = rh.orders.order_trailing_stop(
+                                    symbol = ticker,
+                                    quantity = shares_to_trade,
+                                    side = "sell",
+                                    trailAmount = ticker_trail_amount,
+                                    trailType = 'amount',
+                                    timeInForce = 'gtc',
+                                    jsonify= True
+                                )
+            print(f"Trailing Stop Order for {ticker} position")
+            print (trailing_stop)
+                                                
+        if in_short_position:
+            print("In Short Position")
+            order = rh.orders.order(symbol        = inverse_ticker,
+                                    quantity      = inverse_shares_owned,
+                                    side          = "sell",
+                                    extendedHours = True,
+                                    market_hours  = "extended_hours")
+            print(f"Closing {inverse_ticker} position")
+            print(order)
+            in_short_position = False
     else:
-        global in_long_position
-        stock_positions = rh.account.get_all_positions()
-        stock_quote = rh.get_stock_quote_by_symbol(ticker)
-        inverse_stock_quote = rh.get_stock_quote_by_symbol(inverse_ticker)
-        
-        shares_owned = 0
-        for item in stock_positions:
-            if item['symbol'] == ticker:
-                shares_owned = float(item['quantity'])
-                market_value = shares_owned * float(stock_quote['last_trade_price'])
-                if shares_owned > 0:
-                    print("\nYou own ", int(shares_owned), "shares of ", ticker, " with a Market Value of: $", float(market_value))
-            elif item['symbol'] == inverse_ticker:
-                inverse_shares_owned = float(item['quantity'])
-                inverse_market_value = inverse_shares_owned * float(stock_quote['last_trade_price'])
-                if inverse_shares_owned:
-                    print("\nYou own ", int(inverse_shares_owned), "shares of ", inverse_ticker, " with a Market Value of: $", float(inverse_market_value))
-        
-        shares_to_trade = int(trade_amount // float(stock_quote['last_trade_price']))
-        inverse_shares_to_trade = int(trade_amount // float(inverse_stock_quote['last_trade_price']))
-        
-        if shares_owned > shares_to_trade:
-            print("You own more share than the ones that you were willing to trade with. Selling some:")
-            extra_shares = shares_owned - shares_to_trade
-            rh.orders.order(symbol        = ticker,
-                            quantity      = shares_owned,
-                            side          = "sell",
-                            extendedHours = True,
-                            market_hours  = "extended_hours")
-            print("Selling ",extra_shares, " extra shares of ", ticker )
-        if inverse_shares_owned > inverse_shares_to_trade:
-            print("You own more share than the ones that you were willing to trade with. Selling some:")
-            inverse_extra_shares = inverse_shares_owned - inverse_shares_to_trade
-            rh.orders.order(symbol        = inverse_ticker,
-                            quantity      = inverse_shares_owned,
-                            side          = "sell",
-                            extendedHours = True,
-                            market_hours  = "extended_hours")
-            print("Selling ",inverse_extra_shares, " extra shares of ", inverse_ticker )
-        
-        in_long_position = market_value >= 1
-        in_short_position = inverse_market_value >=1
-        
-        last_row_index = len(df.index) - 1 #get the index of the last row
-        if df['in_uptrend'][last_row_index]:
-            print("Current Trend: UpTrend")
-            print("You can trade with ", shares_to_trade, " shares")
-            if not in_long_position:
-                order = rh.orders.order(symbol        = ticker,
-                                        quantity      = shares_to_trade,
-                                        side          = "buy",
-                                        extendedHours = True,
-                                        market_hours  = "extended_hours")                
-                print(f"Opening {ticker} position")
-                print(order)
-                in_long_position = True  
-            if in_short_position:
-                print("In Short Position")
-                order = rh.orders.order(symbol        = inverse_ticker,
-                                        quantity      = inverse_shares_owned,
-                                        side          = "sell",
-                                        extendedHours = True,
-                                        market_hours  = "extended_hours")
-                print(f"Closing {inverse_ticker} position")
-                print(order)
-                in_short_position = False
-        else:
-            print("Current Trend: DownTrend")
-            print("You can trade with ", inverse_shares_to_trade, " shares")
-            if in_long_position:
-                print("In Long Position")
-                order = rh.orders.order(symbol        = ticker,
-                                quantity      = shares_owned,
-                                side          = "sell",
-                                extendedHours = True,
-                                market_hours  = "extended_hours")
-                print(f"Closing {ticker} position")
-                print(order)
-                in_long_position = False
-            if not in_short_position:
-                order = rh.orders.order(symbol        = inverse_ticker,
-                                        quantity      = inverse_shares_to_trade,
-                                        side          = "buy",
-                                        extendedHours = True,
-                                        market_hours  = "extended_hours")
-                print(f"Opening {inverse_ticker} position")
-                print(order)
-                in_short_position = True
+        print("Current Trend: DownTrend")
+        print("You can trade with ", inverse_shares_to_trade, " shares")
+        if in_long_position:
+            print("In Long Position")
+            order = rh.orders.order(symbol        = ticker,
+                                    quantity      = shares_owned,
+                                    side          = "sell",
+                                    extendedHours = True,
+                                    market_hours  = "extended_hours")
+            print(f"Closing {ticker} position")
+            print(order)
+            in_long_position = False
+        if not in_short_position:
+            order = rh.orders.order(symbol        = inverse_ticker,
+                                    quantity      = inverse_shares_to_trade,
+                                    side          = "buy",
+                                    extendedHours = True,
+                                    market_hours  = "extended_hours")
+            print(f"Opening {inverse_ticker} position")
+            print(order)
+            in_short_position = True
+            trailing_stop = rh.orders.order_trailing_stop(
+                                    symbol = inverse_ticker ,
+                                    quantity = inverse_shares_to_trade,
+                                    side = "sell",
+                                    trailAmount = inverse_ticker_trail_amount,
+                                    trailType = 'amount',
+                                    timeInForce = 'gtc',
+                                    jsonify= True
+                    )
+            print(f"Trailing Stop Order for {ticker} position")
+            print (trailing_stop)
 
 # Check if current time is within trading hours
 def within_trading_hours():
