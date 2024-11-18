@@ -105,7 +105,14 @@ def is_trailing_stop_order_pending(symbol):
             return True
     return False
 
-
+# Helper function to check if a trailing stop order is filled
+def is_trailing_stop_order_filled(symbol):
+    orders = rh.orders.get_all_stock_orders()
+    for order in orders:
+        if order['instrument_id'] == symbol and order['trigger'] == "stop" and order['ref_id'] in trailing_stop_order_ids:
+            if order['state'] == 'filled':
+                return True
+    return False
 
 #buy and sell signals
 def place_orders(df):
@@ -113,6 +120,8 @@ def place_orders(df):
     global reference_id
     global in_long_position, last_trailing_stop_time, last_trailing_stop_price, last_inverse_trailing_stop_price
     stock_positions = rh.account.get_all_positions()
+    
+    
 
     try:
         instrument_id = rh.get_instruments_by_symbols(symbol)[0]['id']
@@ -129,6 +138,16 @@ def place_orders(df):
         return
     
     shares_owned = 0
+
+    # Check if trailing stop orders have been filled
+    if is_trailing_stop_order_filled(instrument_id):
+        print(f"Trailing Stop Order for {symbol} was filled")
+        last_trailing_stop_time = time.time()
+        last_trailing_stop_price = float(stock_quote['last_trade_price'])
+    if is_trailing_stop_order_filled(inverse_instrument_id):
+        print(f"Trailing Stop Order for {inverse_symbol} was filled")
+        last_trailing_stop_time = time.time()
+        last_inverse_trailing_stop_price = float(inverse_stock_quote['last_trade_price'])
 
     if is_order_pending(instrument_id, shares_owned, "buy"):
         print(f"Buy Order for {symbol} is still active")
@@ -245,13 +264,13 @@ def place_orders(df):
                                         jsonify= True)
                 print(f"Trailing Stop Order for {symbol} position")
                 print (trailing_stop)
+                if 'ref_id' in trailing_stop:
+                    trailing_stop_order_ids.append(trailing_stop['ref_id'])  # Store the reference ID
+                    print("Reference ID added to the list")
+                else:
+                    print(f"Trailing stop order for {symbol} did not return a reference ID.")
             else:
                 print(f"Trailing Stop Order for {symbol} is still active")
-            if 'ref_id' in trailing_stop:
-                trailing_stop_order_ids.append(trailing_stop['ref_id'])  # Store the reference ID
-                print("Refenrence ID added to the list")
-            else:
-                print(f"Trailing stop order for {symbol} did not return a reference ID.")
         if in_short_position: #close short position on uptrend
             print("In Short Position")
             if not is_order_pending(inverse_symbol, inverse_shares_owned, "sell"):
@@ -297,9 +316,11 @@ def place_orders(df):
                 print (trailing_stop)
                 if 'ref_id' in trailing_stop:
                     trailing_stop_order_ids.append(trailing_stop['ref_id'])  # Store the reference ID
-                    print("Refenrence ID added to the list")
+                    print("Reference ID added to the list")
                 else:
                     print(f"Trail stop order for {inverse_symbol} did not return a reference ID.")
+            else:
+                print(f"Trailing Stop Order for {inverse_symbol} is still active")
         if in_long_position: #close long position on downtrend
             print("In Long Position")
             if not is_order_pending(symbol, shares_owned, "sell"):
