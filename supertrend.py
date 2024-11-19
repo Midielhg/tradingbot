@@ -101,13 +101,15 @@ def is_trailing_stop_order_filled(symbol):
                 return True
     return False
 
+
+def within_trading_hours():
+    now = datetime.now().time()
+    return market_open <= now <= market_close
+
 #buy and sell signals
 def place_orders(df):
     #check if the market is open
-    if not within_trading_hours():
-        print("Market is closed. No trades will be placed.")
-        return
-    else:
+    if within_trading_hours():
         print(df.tail(1)) # Log the last 2 rows of the dataframe
         global reference_id
         global in_long_position, last_trailing_stop_time, last_trailing_stop_price, last_inverse_trailing_stop_price
@@ -337,12 +339,9 @@ def place_orders(df):
                         break
                     time.sleep(5)  # Add a delay to avoid excessive API calls  
                 in_long_position = False
-
-
-# Check if current time is within trading hours
-def within_trading_hours():
-    current_time = datetime.now().time()
-    return market_open <= current_time <= market_close
+    else:
+        print("Market is closed. No trades will be placed.")
+        return
 
 # Close all open positions before market closes
 def close_all_positions():
