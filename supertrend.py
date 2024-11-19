@@ -40,7 +40,6 @@ last_trailing_stop_price = 0
 last_inverse_trailing_stop_price = 0
 reference_id = " "
 
-pending_orders = rh.orders.get_all_open_stock_orders()
 
 # Initialize a list to store reference IDs of trailing stop orders placed by the bot
 trailing_stop_order_ids = []
@@ -91,19 +90,7 @@ def supertrend(df, period, atr_multiplier): #supertrend
             
     return df
 
-# Helper function to check if an order is pending
-def is_order_pending(symbol, shares, side):
-    for order in pending_orders:
-        if order['instrument_id'] == symbol and order['quantity'] == shares and order['side'] == side and order['trigger'] == 'immediate':
-            return True
-    return False
 
-# Helper function to check if a trailing stop order is pending
-def is_trailing_stop_order_pending(symbol):
-    for order in pending_orders:
-        if order['instrument_id'] == symbol and order['trigger'] == "stop" and order['ref_id'] in trailing_stop_order_ids:
-            return True
-    return False
 
 # Helper function to check if a trailing stop order is filled
 def is_trailing_stop_order_filled(symbol):
@@ -119,9 +106,18 @@ def place_orders(df):
     print(df.tail(2)) # Log the last 2 rows of the dataframe
     global reference_id
     global in_long_position, last_trailing_stop_time, last_trailing_stop_price, last_inverse_trailing_stop_price
+    global cooldown_period  # Add this line to ensure cooldown_period is accessible
     stock_positions = rh.account.get_all_positions()
+    pending_orders = rh.orders.get_all_open_stock_orders()
     
-    
+
+    # Helper function to check if a trailing stop order is pending
+    def is_trailing_stop_order_pending(symbol):
+        for order in pending_orders:
+            if order['instrument_id'] == symbol and order['trigger'] == "stop" and order['ref_id'] in trailing_stop_order_ids:
+                return True
+        return False
+
 
     try:
         instrument_id = rh.get_instruments_by_symbols(symbol)[0]['id']
@@ -144,13 +140,12 @@ def place_orders(df):
         print(f"Trailing Stop Order for {symbol} was filled")
         last_trailing_stop_time = time.time()
         last_trailing_stop_price = float(stock_quote['last_trade_price'])
+        last_trailing_stop_time = 0  # Reset cooldown period here
     if is_trailing_stop_order_filled(inverse_instrument_id):
         print(f"Trailing Stop Order for {inverse_symbol} was filled")
         last_trailing_stop_time = time.time()
         last_inverse_trailing_stop_price = float(inverse_stock_quote['last_trade_price'])
-
-    if is_order_pending(instrument_id, shares_owned, "buy"):
-        print(f"Buy Order for {symbol} is still active")
+        last_trailing_stop_time = 0  # Reset cooldown period here
     
     if is_trailing_stop_order_pending(instrument_id):
         print(f"Trailing Stop Order for {symbol} is still active")
@@ -203,36 +198,7 @@ def place_orders(df):
     
     shares_to_trade = int(trade_amount // float(stock_quote['last_trade_price']))
     inverse_shares_to_trade = int(trade_amount // float(inverse_stock_quote['last_trade_price']))
-    
-    # if shares_owned > shares_to_trade:
-    #     print("You own more share than the ones that you were willing to trade with. Selling some:")
-    #     extra_shares = shares_owned - shares_to_trade
-    #     if not is_order_pending(symbol, shares_owned, "sell"):
-    #         order  = rh.orders.order(symbol        = symbol,
-    #                         quantity      = shares_owned,
-    #                         side          = "sell",
-    #                         extendedHours = True,
-    #                         market_hours  = "extended_hours")
-    #         print("Selling ", extra_shares, " extra shares of ", symbol)
-    #     else:
-    #         print("Pending order found for selling ", shares_owned, " shares of ", symbol)
-    #     #get the reference id of from the order 
-    #     reference_id = order['ref_id']
-        
-        
-    # if inverse_shares_owned > inverse_shares_to_trade:
-    #     print("You own more share than the ones that you were willing to trade with. Selling some:")
-    #     inverse_extra_shares = inverse_shares_owned - inverse_shares_to_trade
-    #     if not is_order_pending(inverse_symbol, inverse_shares_owned, "sell"):
-    #         order = rh.orders.order(symbol        = inverse_symbol,
-    #                         quantity      = inverse_shares_owned,
-    #                         side          = "sell",
-    #                         extendedHours = True,
-    #                         market_hours  = "extended_hours")
-    #         print("Selling ", inverse_extra_shares, " extra shares of ", inverse_symbol)
-    #     else:
-    #         print("Pending order found for selling ", inverse_shares_owned, " shares of ", inverse_symbol)
-    
+
     in_long_position = market_value >= 1
     in_short_position = inverse_market_value >=1
     
@@ -241,18 +207,27 @@ def place_orders(df):
         print("Current Trend: UpTrend")
         print("You can trade with ", shares_to_trade, " shares")
         if not in_long_position: #opening long position on uptrend
-            if not is_order_pending(symbol, shares_to_trade, "buy"):
-                order = rh.orders.order(symbol        = symbol,
-                                        quantity      = shares_to_trade,
-                                        side          = "buy",
-                                        extendedHours = True,
-                                        market_hours  = "extended_hours")                
-                print(f"Opening {symbol} position")
-                # print(order)
-                while is_order_pending(symbol, shares_to_trade, "buy"):
-                    print("Waiting for order to be executed...")
-                    time.sleep(1)
-                in_long_position = True
+            order = rh.orders.order(symbol        = symbol,
+                                    quantity      = shares_to_trade,
+                                    side          = "buy",
+                                    extendedHours = True,
+                                    market_hours  = "extended_hours")                
+            print(f"Opening {symbol} position")
+            order_id = order['id']
+            while True:
+                open_orders = rh.orders.get_all_open_stock_orders()
+                order_status = None
+                for open_order in open_orders:
+                    if open_order['id'] == order_id:
+                        order_status = open_order['state']
+                        break
+                if order_status in ['filled', 'canceled', 'rejected']:
+                    print(f"Order {order_id} is no longer pending. Status: {order_status}")
+                    break
+                else:
+                    print(f"Order {order_id} is still pending. Status: {order_status}")
+                    time.sleep(5)
+            in_long_position = True
             if not is_trailing_stop_order_pending(instrument_id):
                 trailing_stop = rh.orders.order_trailing_stop(
                                         symbol = symbol,
@@ -273,36 +248,54 @@ def place_orders(df):
                 print(f"Trailing Stop Order for {symbol} is still active")
         if in_short_position: #close short position on uptrend
             print("In Short Position")
-            if not is_order_pending(inverse_symbol, inverse_shares_owned, "sell"):
-                order = rh.orders.order(symbol        = inverse_symbol,
-                                        quantity      = inverse_shares_owned,
-                                        side          = "sell",
-                                        extendedHours = True,
-                                        market_hours  = "extended_hours")
-                print("Closing ", inverse_shares_owned, " shares of ", inverse_symbol)
-                # pprint.pprint(order)
-                while is_order_pending(inverse_symbol, inverse_shares_owned, "sell"):
-                    print("Waiting for order to be executed...")
-                    time.sleep(1)
-                in_short_position = False
-            else:
-                print("Pending order found to close ", inverse_shares_owned, " shares of ", inverse_symbol)
+            order = rh.orders.order(symbol        = inverse_symbol,
+                                    quantity      = inverse_shares_owned,
+                                    side          = "sell",
+                                    extendedHours = True,
+                                    market_hours  = "extended_hours")
+            print("Closing ", inverse_shares_owned, " shares of ", inverse_symbol)
+            order_id = order['id']
+            while True:
+                open_orders = rh.orders.get_all_open_stock_orders()
+                order_status = None
+                for open_order in open_orders:
+                    if open_order['id'] == order_id:
+                        order_status = open_order['state']
+                        break
+                if order_status in ['filled', 'canceled', 'rejected']:
+                    print(f"Order {order_id} is no longer pending. Status: {order_status}")
+                    break
+                else:
+                    print(f"Order {order_id} is still pending. Status: {order_status}")
+                    time.sleep(5)
+            in_short_position = False
     else:
         print("Current Trend: DownTrend")
         print("You can trade with ", inverse_shares_to_trade, " shares")
         if not in_short_position:
-            if not is_order_pending(inverse_symbol, inverse_shares_to_trade, "buy"):
-                order = rh.orders.order(symbol        = inverse_symbol,
-                                        quantity      = inverse_shares_to_trade,
-                                        side          = "buy",
-                                        extendedHours = True,
-                                        market_hours  = "extended_hours")
-                print(f"Opening {inverse_symbol} position")
-                # print(order)
-                while is_order_pending(inverse_symbol, inverse_shares_to_trade, "buy"):
-                    print("Waiting for order to be executed...")
-                    time.sleep(1)
-                in_short_position = True
+            order = rh.orders.order(symbol        = inverse_symbol,
+                                    quantity      = inverse_shares_to_trade,
+                                    side          = "buy",
+                                    extendedHours = True,
+                                    market_hours  = "extended_hours")
+            print(f"Opening {inverse_symbol} position")
+            # Extract the order ID from the order response
+            order_id = order['id']
+            # Check if the order is pending
+            while True:
+                open_orders = rh.orders.get_all_open_stock_orders()
+                order_status = None
+                for open_order in open_orders:
+                    if open_order['id'] == order_id:
+                        order_status = open_order['state']
+                        break
+                if order_status in ['filled', 'canceled', 'rejected']:
+                    print(f"Order {order_id} is no longer pending. Status: {order_status}")
+                    break
+                else:
+                    print(f"Order {order_id} is still pending. Status: {order_status}")
+                    time.sleep(5)  # Wait for 5 seconds before checking again    
+            in_short_position = True
             if not is_trailing_stop_order_pending(inverse_instrument_id):                       
                 trailing_stop = rh.orders.order_trailing_stop(
                                         symbol = inverse_symbol,
@@ -323,20 +316,28 @@ def place_orders(df):
                 print(f"Trailing Stop Order for {inverse_symbol} is still active")
         if in_long_position: #close long position on downtrend
             print("In Long Position")
-            if not is_order_pending(symbol, shares_owned, "sell"):
-                order = rh.orders.order(symbol        = symbol,
-                                        quantity      = shares_owned,
-                                        side          = "sell",
-                                        extendedHours = True,
-                                        market_hours  = "extended_hours")
-                print(f"Closing {symbol} position")
-                # print(order)
-                while is_order_pending(symbol, shares_owned, "sell"):
-                    print("Waiting for order to be executed...")
-                    time.sleep(1)
-            else:
-                print("Pending order found to close ", shares_owned, " shares of ", symbol)
-        
+            order = rh.orders.order(symbol        = symbol,
+                                    quantity      = shares_owned,
+                                    side          = "sell",
+                                    extendedHours = True,
+                                    market_hours  = "extended_hours")
+            print(f"Closing {symbol} position")
+            order_id = order['id']
+            while True:
+                open_orders = rh.orders.get_all_open_stock_orders()
+                order_status = None
+                for open_order in open_orders:
+                    if open_order['id'] == order_id:
+                        order_status = open_order['state']
+                        break
+                if order_status in ['filled', 'canceled', 'rejected']:
+                    print(f"Order {order_id} is no longer pending. Status: {order_status}")
+                    break
+                else:
+                    print(f"Order {order_id} is still pending. Status: {order_status}")
+                    time.sleep(5)
+            in_long_position = False
+
 
 # Check if current time is within trading hours
 def within_trading_hours():
@@ -381,6 +382,7 @@ def run_bot():
     except FloatingPointError:
         print("Invalid timestamp encountered.")
         return
+
     supertrend(df, period, factor)
     place_orders(df)
 
