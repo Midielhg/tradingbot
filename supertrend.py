@@ -27,7 +27,7 @@ symbol = "TQQQ"
 inverse_symbol = "SQQQ"
 period = 5
 factor = 2
-trade_amount = 500
+trade_amount = 1000
 market_value = 0
 
 # Define Trading Hours (9:30 AM to 4:00 PM)
@@ -103,240 +103,240 @@ def is_trailing_stop_order_filled(symbol):
 
 #buy and sell signals
 def place_orders(df):
-    print(df.tail(2)) # Log the last 2 rows of the dataframe
-    global reference_id
-    global in_long_position, last_trailing_stop_time, last_trailing_stop_price, last_inverse_trailing_stop_price
-    global cooldown_period  # Add this line to ensure cooldown_period is accessible
-    stock_positions = rh.account.get_all_positions()
-    pending_orders = rh.orders.get_all_open_stock_orders()
-    
-
-    # Helper function to check if a trailing stop order is pending
-    def is_trailing_stop_order_pending(symbol):
-        for order in pending_orders:
-            if order['instrument_id'] == symbol and order['trigger'] == "stop" and order['ref_id'] in trailing_stop_order_ids:
-                return True
-        return False
-
-
-    try:
-        instrument_id = rh.get_instruments_by_symbols(symbol)[0]['id']
-        inverse_instrument_id = rh.get_instruments_by_symbols(inverse_symbol)[0]['id']
-    except (IndexError, KeyError) as e:
-        print(f"Failed to get instrument IDs: {e}")
+    #check if the market is open
+    if not within_trading_hours():
+        print("Market is closed. No trades will be placed.")
         return
-
-    try:
-        stock_quote = rh.get_stock_quote_by_symbol(symbol)
-        inverse_stock_quote = rh.get_stock_quote_by_symbol(inverse_symbol)
-    except KeyError as e:
-        print(f"Failed to get stock quotes: {e}")
-        return
-    
-    shares_owned = 0
-
-    # Check if trailing stop orders have been filled
-    if is_trailing_stop_order_filled(instrument_id):
-        print(f"Trailing Stop Order for {symbol} was filled")
-        last_trailing_stop_time = time.time()
-        last_trailing_stop_price = float(stock_quote['last_trade_price'])
-        last_trailing_stop_time = 0  # Reset cooldown period here
-    if is_trailing_stop_order_filled(inverse_instrument_id):
-        print(f"Trailing Stop Order for {inverse_symbol} was filled")
-        last_trailing_stop_time = time.time()
-        last_inverse_trailing_stop_price = float(inverse_stock_quote['last_trade_price'])
-        last_trailing_stop_time = 0  # Reset cooldown period here
-    
-    if is_trailing_stop_order_pending(instrument_id):
-        print(f"Trailing Stop Order for {symbol} is still active")
-    elif reference_id not in trailing_stop_order_ids:
-        print(f"Trailing Stop not placed for {symbol}")
     else:
-        print(f"Trailing Stop was executed for {symbol}")
-        last_trailing_stop_time = time.time()
-        last_trailing_stop_price = float(stock_quote['last_trade_price'])
-        last_trailing_stop_time = 0  # Reset cooldown period
-    print("Last Trailing Stop Price: ", last_trailing_stop_price)
+        print(df.tail(1)) # Log the last 2 rows of the dataframe
+        global reference_id
+        global in_long_position, last_trailing_stop_time, last_trailing_stop_price, last_inverse_trailing_stop_price
+        global cooldown_period  # Add this line to ensure cooldown_period is accessible
+        stock_positions = rh.account.get_all_positions()
+        pending_orders = rh.orders.get_all_open_stock_orders()
+        
+
+        # Helper function to check if a trailing stop order is pending
+        def is_trailing_stop_order_pending(symbol):
+            for order in pending_orders:
+                if order['instrument_id'] == symbol and order['trigger'] == "stop" and order['ref_id'] in trailing_stop_order_ids:
+                    return True
+            return False
 
 
-    if is_trailing_stop_order_pending(inverse_instrument_id):
-        print(f"Trailing Stop Order for {inverse_symbol} is still active")
-    elif reference_id not in trailing_stop_order_ids:
-        print(f"Trailing Stop not placed for {inverse_symbol}")
-    else:
-        print(f"Trailing Stop was executed for {inverse_symbol}")
-        last_trailing_stop_time = time.time()
-        last_inverse_trailing_stop_price = float(inverse_stock_quote['last_trade_price'])
-        last_trailing_stop_time = 0  # Reset cooldown period
-    print("Last Inverse Trailing Stop Price: ", last_inverse_trailing_stop_price)
-
-    # Calculate trail amounts
-    symbol_trail_amount = round(float(stock_quote['last_trade_price']) * 0.002, 3)
-    inverse_symbol_trail_amount = round(float(inverse_stock_quote['last_trade_price']) * 0.002, 3)
-
-    # Check cooldown period
-    if time.time() - last_trailing_stop_time < cooldown_period:
-        if (float(stock_quote['last_trade_price']) > last_trailing_stop_price + symbol_trail_amount or
-            float(inverse_stock_quote['last_trade_price']) > last_inverse_trailing_stop_price + inverse_symbol_trail_amount):
-            print("Symbol price is higher than the trailing stop price plus trail amount. Disabling cooldown.")
-            last_trailing_stop_time = 0
-        else:
-            print("Cooldown period active. No trades will be placed.")
+        try:
+            instrument_id = rh.get_instruments_by_symbols(symbol)[0]['id']
+            inverse_instrument_id = rh.get_instruments_by_symbols(inverse_symbol)[0]['id']
+        except (IndexError, KeyError) as e:
+            print(f"Failed to get instrument IDs: {e}")
             return
 
-    for item in stock_positions:
-        if item['symbol'] == symbol:
-            shares_owned = float(item['quantity'])
-            market_value = shares_owned * float(stock_quote['last_trade_price'])
-            if shares_owned > 0:
-                print(f"\nYou own {int(shares_owned)} shares of {symbol} with a Market Value of: ${float(market_value)}")
-        elif item['symbol'] == inverse_symbol:
-            inverse_shares_owned = float(item['quantity'])
-            inverse_market_value = inverse_shares_owned * float(stock_quote['last_trade_price'])
-            if inverse_shares_owned:
-                print(f"\nYou own {int(inverse_shares_owned)} shares of {inverse_symbol} with a Market Value of: ${float(inverse_market_value)}")
-    
-    shares_to_trade = int(trade_amount // float(stock_quote['last_trade_price']))
-    inverse_shares_to_trade = int(trade_amount // float(inverse_stock_quote['last_trade_price']))
+        try:
+            stock_quote = rh.get_stock_quote_by_symbol(symbol)
+            inverse_stock_quote = rh.get_stock_quote_by_symbol(inverse_symbol)
+        except KeyError as e:
+            print(f"Failed to get stock quotes: {e}")
+            return
+        
+        shares_owned = 0
 
-    in_long_position = market_value >= 1
-    in_short_position = inverse_market_value >=1
-    
-    last_row_index = len(df.index) - 1 #get the index of the last row
-    if df['in_uptrend'][last_row_index]:
-        print("Current Trend: UpTrend")
-        print("You can trade with ", shares_to_trade, " shares")
-        if not in_long_position: #opening long position on uptrend
-            order = rh.orders.order(symbol        = symbol,
-                                    quantity      = shares_to_trade,
-                                    side          = "buy",
-                                    extendedHours = True,
-                                    market_hours  = "extended_hours")                
-            print(f"Opening {symbol} position")
-            order_id = order['id']
-            while True:
-                open_orders = rh.orders.get_all_open_stock_orders()
-                order_status = None
-                for open_order in open_orders:
-                    if open_order['id'] == order_id:
-                        order_status = open_order['state']
-                        break
-                if order_status in ['filled', 'canceled', 'rejected']:
-                    print(f"Order {order_id} is no longer pending. Status: {order_status}")
-                    break
-                else:
-                    print(f"Order {order_id} is still pending. Status: {order_status}")
-                    time.sleep(5)
-            in_long_position = True
-            if not is_trailing_stop_order_pending(instrument_id):
-                trailing_stop = rh.orders.order_trailing_stop(
-                                        symbol = symbol,
-                                        quantity = shares_to_trade,
-                                        side = "sell",
-                                        trailAmount = symbol_trail_amount,
-                                        trailType = 'amount',
-                                        timeInForce = 'gtc',
-                                        jsonify= True)
-                print(f"Trailing Stop Order for {symbol} position")
-                print (trailing_stop)
-                if 'ref_id' in trailing_stop:
-                    trailing_stop_order_ids.append(trailing_stop['ref_id'])  # Store the reference ID
-                    print("Reference ID added to the list")
-                else:
-                    print(f"Trailing stop order for {symbol} did not return a reference ID.")
+        # Check if trailing stop orders have been filled
+        if is_trailing_stop_order_filled(instrument_id):
+            print(f"Trailing Stop Order for {symbol} was filled")
+            last_trailing_stop_time = time.time()
+            last_trailing_stop_price = float(stock_quote['last_trade_price'])
+            last_trailing_stop_time = 0  # Reset cooldown period here
+        if is_trailing_stop_order_filled(inverse_instrument_id):
+            print(f"Trailing Stop Order for {inverse_symbol} was filled")
+            last_trailing_stop_time = time.time()
+            last_inverse_trailing_stop_price = float(inverse_stock_quote['last_trade_price'])
+            last_trailing_stop_time = 0  # Reset cooldown period here
+        
+        if is_trailing_stop_order_pending(instrument_id):
+            print(f"Trailing Stop Order for {symbol} is still active")
+        elif reference_id not in trailing_stop_order_ids:
+            print(f"Trailing Stop not placed for {symbol}")
+        else:
+            print(f"Trailing Stop was executed for {symbol}")
+            last_trailing_stop_time = time.time()
+            last_trailing_stop_price = float(stock_quote['last_trade_price'])
+            last_trailing_stop_time = 0  # Reset cooldown period
+        print("Last Trailing Stop Price: ", last_trailing_stop_price)
+
+
+        if is_trailing_stop_order_pending(inverse_instrument_id):
+            print(f"Trailing Stop Order for {inverse_symbol} is still active")
+        elif reference_id not in trailing_stop_order_ids:
+            print(f"Trailing Stop not placed for {inverse_symbol}")
+        else:
+            print(f"Trailing Stop was executed for {inverse_symbol}")
+            last_trailing_stop_time = time.time()
+            last_inverse_trailing_stop_price = float(inverse_stock_quote['last_trade_price'])
+            last_trailing_stop_time = 0  # Reset cooldown period
+        print("Last Inverse Trailing Stop Price: ", last_inverse_trailing_stop_price)
+
+        # Calculate trail amounts
+        symbol_trail_amount = round(float(stock_quote['last_trade_price']) * 0.002, 3)
+        inverse_symbol_trail_amount = round(float(inverse_stock_quote['last_trade_price']) * 0.002, 3)
+
+        # Check cooldown period
+        if time.time() - last_trailing_stop_time < cooldown_period:
+            if (float(stock_quote['last_trade_price']) > last_trailing_stop_price + symbol_trail_amount or
+                float(inverse_stock_quote['last_trade_price']) > last_inverse_trailing_stop_price + inverse_symbol_trail_amount):
+                print("Symbol price is higher than the trailing stop price plus trail amount. Disabling cooldown.")
+                last_trailing_stop_time = 0
             else:
-                print(f"Trailing Stop Order for {symbol} is still active")
-        if in_short_position: #close short position on uptrend
-            print("In Short Position")
-            order = rh.orders.order(symbol        = inverse_symbol,
-                                    quantity      = inverse_shares_owned,
-                                    side          = "sell",
-                                    extendedHours = True,
-                                    market_hours  = "extended_hours")
-            print("Closing ", inverse_shares_owned, " shares of ", inverse_symbol)
-            order_id = order['id']
-            while True:
-                open_orders = rh.orders.get_all_open_stock_orders()
-                order_status = None
-                for open_order in open_orders:
-                    if open_order['id'] == order_id:
-                        order_status = open_order['state']
+                print("Cooldown period active. No trades will be placed.")
+                return
+
+        for item in stock_positions:
+            if item['symbol'] == symbol:
+                shares_owned = float(item['quantity'])
+                market_value = shares_owned * float(stock_quote['last_trade_price'])
+                if shares_owned > 0:
+                    print(f"\nYou own {int(shares_owned)} shares of {symbol} with a Market Value of: ${float(market_value)}")
+            elif item['symbol'] == inverse_symbol:
+                inverse_shares_owned = float(item['quantity'])
+                inverse_market_value = inverse_shares_owned * float(stock_quote['last_trade_price'])
+                if inverse_shares_owned:
+                    print(f"\nYou own {int(inverse_shares_owned)} shares of {inverse_symbol} with a Market Value of: ${float(inverse_market_value)}")
+        
+        shares_to_trade = int(trade_amount // float(stock_quote['last_trade_price']))
+        inverse_shares_to_trade = int(trade_amount // float(inverse_stock_quote['last_trade_price']))
+
+        in_long_position = market_value >= 1
+        in_short_position = inverse_market_value >=1
+        
+        last_row_index = len(df.index) - 1 #get the index of the last row
+        if df['in_uptrend'][last_row_index]:
+            print("Current Trend: UpTrend")
+            print("You can trade with ", shares_to_trade, " shares")
+            if not in_long_position: #opening long position on uptrend
+                order = rh.orders.order(symbol        = symbol,
+                                        quantity      = shares_to_trade,
+                                        side          = "buy",
+                                        extendedHours = True,
+                                        market_hours  = "extended_hours")                
+                print(f"Opening {symbol} position")
+                order_id = order[0]['id']
+                while True:
+                    open_orders = rh.orders.get_all_open_stock_orders()
+                    for open_order in open_orders:
+                        if open_order['id'] == order_id:
+                            print("Order pending")
+                            break
+                        else:
+                            print("Order not pending")
+                            break
+                    if open_order['id'] != order_id:
                         break
-                if order_status in ['filled', 'canceled', 'rejected']:
-                    print(f"Order {order_id} is no longer pending. Status: {order_status}")
-                    break
+                    time.sleep(5)  # Add a delay to avoid excessive API calls
+                in_long_position = True
+                if not is_trailing_stop_order_pending(instrument_id):
+                    trailing_stop = rh.orders.order_trailing_stop(
+                                            symbol = symbol,
+                                            quantity = shares_to_trade,
+                                            side = "sell",
+                                            trailAmount = symbol_trail_amount,
+                                            trailType = 'amount',
+                                            timeInForce = 'gtc',
+                                            jsonify= True)
+                    print(f"Trailing Stop Order for {symbol} position")
+                    print (trailing_stop)
+                    if 'ref_id' in trailing_stop:
+                        trailing_stop_order_ids.append(trailing_stop['ref_id'])  # Store the reference ID
+                        print("Reference ID added to the list")
+                    else:
+                        print(f"Trailing stop order for {symbol} did not return a reference ID.")
                 else:
-                    print(f"Order {order_id} is still pending. Status: {order_status}")
-                    time.sleep(5)
-            in_short_position = False
-    else:
-        print("Current Trend: DownTrend")
-        print("You can trade with ", inverse_shares_to_trade, " shares")
-        if not in_short_position:
-            order = rh.orders.order(symbol        = inverse_symbol,
-                                    quantity      = inverse_shares_to_trade,
-                                    side          = "buy",
-                                    extendedHours = True,
-                                    market_hours  = "extended_hours")
-            print(f"Opening {inverse_symbol} position")
-            # Extract the order ID from the order response
-            order_id = order['id']
-            # Check if the order is pending
-            while True:
-                open_orders = rh.orders.get_all_open_stock_orders()
-                order_status = None
-                for open_order in open_orders:
-                    if open_order['id'] == order_id:
-                        order_status = open_order['state']
+                    print(f"Trailing Stop Order for {symbol} is still active")
+            if in_short_position: #close short position on uptrend
+                print("In Short Position")
+                order = rh.orders.order(symbol        = inverse_symbol,
+                                        quantity      = inverse_shares_owned,
+                                        side          = "sell",
+                                        extendedHours = True,
+                                        market_hours  = "extended_hours")
+                print("Closing ", inverse_shares_owned, " shares of ", inverse_symbol)
+                order_id = order[0]['id']
+                while True:
+                    open_orders = rh.orders.get_all_open_stock_orders()
+                    for open_order in open_orders:
+                        if open_order['id'] == order_id:
+                            print("Order pending")
+                            break
+                        else:
+                            print("Order not pending")
+                            break
+                    if open_order['id'] != order_id:
                         break
-                if order_status in ['filled', 'canceled', 'rejected']:
-                    print(f"Order {order_id} is no longer pending. Status: {order_status}")
-                    break
-                else:
-                    print(f"Order {order_id} is still pending. Status: {order_status}")
-                    time.sleep(5)  # Wait for 5 seconds before checking again    
-            in_short_position = True
-            if not is_trailing_stop_order_pending(inverse_instrument_id):                       
-                trailing_stop = rh.orders.order_trailing_stop(
-                                        symbol = inverse_symbol,
-                                        quantity = inverse_shares_to_trade,
-                                        side = "sell",
-                                        trailAmount = inverse_symbol_trail_amount,
-                                        trailType = 'amount',
-                                        timeInForce = 'gtc',
-                                        jsonify= True)
-                print(f"Trailing Stop Order for {inverse_symbol} position")
-                print (trailing_stop)
-                if 'ref_id' in trailing_stop:
-                    trailing_stop_order_ids.append(trailing_stop['ref_id'])  # Store the reference ID
-                    print("Reference ID added to the list")
-                else:
-                    print(f"Trail stop order for {inverse_symbol} did not return a reference ID.")
-            else:
-                print(f"Trailing Stop Order for {inverse_symbol} is still active")
-        if in_long_position: #close long position on downtrend
-            print("In Long Position")
-            order = rh.orders.order(symbol        = symbol,
-                                    quantity      = shares_owned,
-                                    side          = "sell",
-                                    extendedHours = True,
-                                    market_hours  = "extended_hours")
-            print(f"Closing {symbol} position")
-            order_id = order['id']
-            while True:
-                open_orders = rh.orders.get_all_open_stock_orders()
-                order_status = None
-                for open_order in open_orders:
-                    if open_order['id'] == order_id:
-                        order_status = open_order['state']
+                    time.sleep(5)  # Add a delay to avoid excessive API calls
+                in_short_position = False
+        else:
+            print("Current Trend: DownTrend")
+            print("You can trade with ", inverse_shares_to_trade, " shares")
+            if not in_short_position:
+                order = rh.orders.order(symbol        = inverse_symbol,
+                                        quantity      = inverse_shares_to_trade,
+                                        side          = "buy",
+                                        extendedHours = True,
+                                        market_hours  = "extended_hours")
+                print(f"Opening {inverse_symbol} position")
+                # Extract the order ID from the order response
+                order_id = order[0]['id']
+                while True:
+                    open_orders = rh.orders.get_all_open_stock_orders()
+                    for open_order in open_orders:
+                        if open_order['id'] == order_id:
+                            print("Order pending")
+                            break
+                        else:
+                            print("Order not pending")
+                            break
+                    if open_order['id'] != order_id:
                         break
-                if order_status in ['filled', 'canceled', 'rejected']:
-                    print(f"Order {order_id} is no longer pending. Status: {order_status}")
-                    break
+                    time.sleep(5)  # Add a delay to avoid excessive API calls  
+                in_short_position = True
+                if not is_trailing_stop_order_pending(inverse_instrument_id):                       
+                    trailing_stop = rh.orders.order_trailing_stop(
+                                            symbol = inverse_symbol,
+                                            quantity = inverse_shares_to_trade,
+                                            side = "sell",
+                                            trailAmount = inverse_symbol_trail_amount,
+                                            trailType = 'amount',
+                                            timeInForce = 'gtc',
+                                            jsonify= True)
+                    print(f"Trailing Stop Order for {inverse_symbol} position")
+                    print (trailing_stop)
+                    if 'ref_id' in trailing_stop:
+                        trailing_stop_order_ids.append(trailing_stop['ref_id'])  # Store the reference ID
+                        print("Reference ID added to the list")
+                    else:
+                        print(f"Trail stop order for {inverse_symbol} did not return a reference ID.")
                 else:
-                    print(f"Order {order_id} is still pending. Status: {order_status}")
-                    time.sleep(5)
-            in_long_position = False
+                    print(f"Trailing Stop Order for {inverse_symbol} is still active")
+            if in_long_position: #close long position on downtrend
+                print("In Long Position")
+                order = rh.orders.order(symbol        = symbol,
+                                        quantity      = shares_owned,
+                                        side          = "sell",
+                                        extendedHours = True,
+                                        market_hours  = "extended_hours")
+                print(f"Closing {symbol} position")
+                order_id = order[0]['id']
+                while True:
+                    open_orders = rh.orders.get_all_open_stock_orders()
+                    for open_order in open_orders:
+                        if open_order['id'] == order_id:
+                            print("Order pending")
+                            break
+                        else:
+                            print("Order not pending")
+                            break
+                    if open_order['id'] != order_id:
+                        break
+                    time.sleep(5)  # Add a delay to avoid excessive API calls  
+                in_long_position = False
 
 
 # Check if current time is within trading hours
