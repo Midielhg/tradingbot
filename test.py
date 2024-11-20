@@ -1,14 +1,29 @@
-import os
+from webull import webull
+import schedule
+import pandas as pd
+pd.set_option('display.max_rows', None)
+import warnings
+warnings.filterwarnings('ignore')
 import time
-import pprint
 import robin_stocks.robinhood as rh
+wb = webull()
+import pprint
+from datetime import datetime, time as dtime
+import os
 
 rh.login(os.getenv('ROBINHOOD_USERNAME'), os.getenv('ROBINHOOD_PASSWORD'))
 
-order = rh.orders.get_all_open_stock_orders()
 # pprint.pprint(order)
 
-order_id = order[0]['id']
+order = rh.orders.order(symbol        = "tqqq",
+                        quantity      = 5,
+                        side          = "buy",
+                        limitPrice= 50,
+                        extendedHours = True,
+                        market_hours  = "extended_hours")   
+
+
+order_id = order['id']
 while True:
     open_orders = rh.orders.get_all_open_stock_orders()
     order_status = None
@@ -18,8 +33,8 @@ while True:
             print("Order pending")
             break
         else:
-            print("Order not pending")
             order_status = "closed"
+            print("Order ", order_id," ", order_status)
             break
     if open_order['id'] != order_id:
         break

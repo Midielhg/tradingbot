@@ -11,7 +11,7 @@ pip install -r requirements.txt
 pip install webull robin_stocks schedule
 
 # Clone and install robin_stocks
-git clone https://github.com/jmfernandes/robin_stocks.git
+# git clone https://github.com/jmfernandes/robin_stocks.git
 cd robin_stocks
 pip install .
 cd ..
