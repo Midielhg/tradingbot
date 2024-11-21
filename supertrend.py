@@ -32,7 +32,7 @@ market_value = 0
 market_open = dtime(9, 30)
 market_close = dtime(16, 0)
 
-cooldown_period = 60
+cooldown_period = 20 #seconds
 last_trailing_stop_time = 0
 last_trailing_stop_price = 0
 last_inverse_trailing_stop_price = 0
@@ -112,13 +112,16 @@ def place_orders(df):
         inverse_symbol_trail_amount = round(float(inverse_stock_quote['last_trade_price']) * 0.005, 3)
 
         # Check cooldown period
-        if time.time() - last_trailing_stop_time < cooldown_period:
-            if (float(stock_quote['last_trade_price']) > last_trailing_stop_price + symbol_trail_amount or
-                float(inverse_stock_quote['last_trade_price']) > last_inverse_trailing_stop_price + inverse_symbol_trail_amount):
+        if time.time() - last_trailing_stop_time < cooldown_period: # Check if the cooldown period has not elapsed
+            if (float(stock_quote['last_trade_price']) > last_trailing_stop_price + symbol_trail_amount or # Check if the symbol price is higher than the trailing stop price plus trail amount
+                float(inverse_stock_quote['last_trade_price']) > last_inverse_trailing_stop_price + inverse_symbol_trail_amount): # Check if the inverse symbol price is higher than the trailing stop price plus trail amount
                 print("Symbol price is higher than the trailing stop price plus trail amount. Disabling cooldown.")
                 last_trailing_stop_time = 0
             else:
                 print("Cooldown period active. No trades will be placed.")
+                # seconds until cooldown period ends
+                cooldown_remaining = cooldown_period - (time.time() - last_trailing_stop_time)
+                print(f"Cooldown period ends in {cooldown_remaining:.2f} seconds.")
                 return
 
         # Check if the bot has any open positions
@@ -219,7 +222,7 @@ def place_orders(df):
                         break
                     time.sleep(5)  # Add a delay to avoid excessive API calls
                 in_short_position = False
-# If the current trend is a downtrend
+    # If the current trend is a downtrend
         else:
             print("Current Trend: DownTrend")
             print("You can trade with ", inverse_shares_to_trade, " shares")
@@ -291,6 +294,28 @@ def place_orders(df):
                         break
                     time.sleep(5)  # Add a delay to avoid excessive API calls
                 in_long_position = False
+                
+        #if any of the trailing_stop_order_id or inverse_trailing_stop_order_id it not on open order, begin cooldown period
+        if in_trailing_stop:
+            for order in open_orders:
+                order_id_found = False
+                if order['id'] == trailing_stop_order_id:
+                    order_id_found = True
+                    break
+            if not order_id_found:
+                print("Trailing Stop Orders limits hits. Starting cooldown period.")
+                last_trailing_stop_time = time.time() # Set the last_trailing_stop_time to the current time
+                
+        if in_inverse_trailing_stop:
+            for order in open_orders:
+                order_id_found = False
+                if order['id'] == inverse_trailing_stop_order_id:
+                    order_id_found = True
+                    break
+            if not order_id_found:
+                print("Inverse Trailing Stop Orders limits hits. Starting cooldown period.")
+                last_trailing_stop_time = time.time()
+        
     else:
         print("Market is closed. No trades will be placed.")
         return
@@ -300,7 +325,22 @@ def close_all_positions():
     global in_long_position
     global in_short_position
     stock_positions = rh.account.get_all_positions()
+    open_orders = rh.orders.get_all_open_stock_orders()
     
+    if in_trailing_stop:
+        for open_order in open_orders:
+            if open_order['id'] == trailing_stop_order_id:
+                print("Cancelling Trailing Stop Order")
+                rh.orders.cancel_stock_order(trailing_stop_order_id)
+                break
+        in_trailing_stop = False
+    if in_inverse_trailing_stop:
+        for open_order in open_orders:
+            if open_order['id'] == inverse_trailing_stop_order_id:
+                print("Cancelling Inverse Trailing Stop Order")
+                rh.orders.cancel_stock_order(inverse_trailing_stop_order_id)
+                break
+        in_inverse_trailing_stop = False
     for item in stock_positions:
         if item['symbol'] == symbol:
             shares_owned = float(item['quantity'])
@@ -311,6 +351,17 @@ def close_all_positions():
                                         extendedHours = True,
                                         market_hours  = "extended_hours")
                 print(f"Closing all positions by selling {shares_owned} shares of {symbol}")
+                while True:
+                    open_orders = rh.orders.get_all_open_stock_orders()
+                    order_found = False
+                    for open_order in open_orders:
+                        if open_order['id'] == order['id']:
+                            print("Order pending")
+                            order_found = True
+                            break
+                    if not order_found:
+                        break
+                    time.sleep(5)
                 in_long_position = False
         elif item['symbol'] == inverse_symbol:
             inverse_shares_owned = float(item['quantity'])
@@ -321,6 +372,17 @@ def close_all_positions():
                                         extendedHours = True,
                                         market_hours  = "extended_hours")
                 print(f"Closing all positions by selling {inverse_shares_owned} shares of {inverse_symbol}")
+                while True:
+                    open_orders = rh.orders.get_all_open_stock_orders()
+                    order_found = False
+                    for open_order in open_orders:
+                        if open_order['id'] == order['id']:
+                            print("Order pending")
+                            order_found = True
+                            break
+                    if not order_found:
+                        break
+                    time.sleep(5)
                 in_short_position = False
 
 # Run the bot  
@@ -336,7 +398,7 @@ def run_bot():
 
     supertrend(df, period, factor)
     place_orders(df)
-
+    
 schedule.every(5).seconds.do(run_bot) #run the bot every 5 seconds
 
 # Schedule position close at 3:59 PM
