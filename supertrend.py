@@ -38,11 +38,15 @@ last_trailing_stop_price = 0
 last_inverse_trailing_stop_price = 0
 reference_id = " "
 # Initialize a list to store reference IDs of trailing stop orders placed by the bot
-trailing_stop_order_ids = []
+trailing_stop_order_id = " "
+inverse_trailing_stop_order_id = " "
+
 
 # Initialize position flags
 in_long_position = False
 in_short_position = False
+in_trailing_stop = False
+in_inverse_trailing_stop = False
 
 #indicators funtions to calculate Supertrend
 def tr(data):#true range
@@ -89,17 +93,10 @@ def place_orders(df):
     if within_trading_hours():
         print(df.tail(1)) # Log the last 2 rows of the dataframe
         global reference_id
+        global trailing_stop_order_id, inverse_trailing_stop_order_id
         global in_long_position, last_trailing_stop_time, last_trailing_stop_price, last_inverse_trailing_stop_price
         global cooldown_period  # Add this line to ensure cooldown_period is accessible
         stock_positions = rh.account.get_all_positions()
-        pending_orders = rh.orders.get_all_open_stock_orders()
-        
-        try:
-            instrument_id = rh.get_instruments_by_symbols(symbol)[0]['id']
-            inverse_instrument_id = rh.get_instruments_by_symbols(inverse_symbol)[0]['id']
-        except (IndexError, KeyError) as e:
-            print(f"Failed to get instrument IDs: {e}")
-            return
 
         try:
             stock_quote = rh.get_stock_quote_by_symbol(symbol)
@@ -109,9 +106,6 @@ def place_orders(df):
             return
         
         shares_owned = 0
-
-
-
 
         # Calculate trail amounts
         symbol_trail_amount = round(float(stock_quote['last_trade_price']) * 0.005, 3)
@@ -127,6 +121,7 @@ def place_orders(df):
                 print("Cooldown period active. No trades will be placed.")
                 return
 
+        # Check if the bot has any open positions
         for item in stock_positions:
             if item['symbol'] == symbol:
                 shares_owned = float(item['quantity'])
@@ -139,17 +134,23 @@ def place_orders(df):
                 if inverse_shares_owned:
                     print(f"\nYou own {int(inverse_shares_owned)} shares of {inverse_symbol} with a Market Value of: ${float(inverse_market_value)}")
         
+        # Calculate the number of shares to trade
         shares_to_trade = int(trade_amount // float(stock_quote['last_trade_price']))
         inverse_shares_to_trade = int(trade_amount // float(inverse_stock_quote['last_trade_price']))
 
+        # Check if the bot is in a position
         in_long_position = market_value >= 1
         in_short_position = inverse_market_value >=1
         
+        # Check the last row of the dataframe
         last_row_index = len(df.index) - 1 #get the index of the last row
+        
+    # Check the current trend
         if df['in_uptrend'][last_row_index]:
             print("Current Trend: UpTrend")
             print("You can trade with ", shares_to_trade, " shares")
-            if not in_long_position: #opening long position on uptrend
+            #opening long position on uptrend
+            if not in_long_position: 
                 order = rh.orders.order(symbol        = symbol,
                                         quantity      = shares_to_trade,
                                         side          = "buy",
@@ -158,6 +159,7 @@ def place_orders(df):
                 print(f"Opening {symbol} position")
                 # Extract the order ID from the order response
                 order_id = order['id']
+                # Wait for the order to be filled
                 while True:
                     open_orders = rh.orders.get_all_open_stock_orders()
                     order_found = False
@@ -168,6 +170,7 @@ def place_orders(df):
                             break
                     if not order_found:
                         in_long_position = True
+                        # Place a trailing stop order
                         trailing_stop = rh.orders.order_trailing_stop(
                                                 symbol = symbol,
                                                 quantity = shares_to_trade,
@@ -178,12 +181,24 @@ def place_orders(df):
                                                 jsonify= True)
                         pprint.pprint(trailing_stop)
                         print(f"Trailing Stop Order for {symbol} position")
-                        trailing_stop_id = trailing_stop['id']
+                        trailing_stop_order_id = trailing_stop['id']
+                        #replace the current trailing stop order id with the new one
+                        in_trailing_stop = True
                         break
                     time.sleep(5)  # Add a delay to avoid excessive API calls
-
+            #close short trailing stop on uptrend
+            if in_inverse_trailing_stop:
+                open_orders = rh.orders.get_all_open_stock_orders()
+                for open_order in open_orders:
+                    if open_order['id'] == inverse_trailing_stop_order_id:
+                        print("Cancelling Inverse Trailing Stop Order")
+                        rh.orders.cancel_stock_order(inverse_trailing_stop_order_id)
+                        break
+                in_inverse_trailing_stop = False
+                # Update the trailing stop price and time
+                last_inverse_trailing_stop_price = float(inverse_stock_quote['last_trade_price'])
+            #close short position on uptrend
             if in_short_position: 
-                #close short position on uptrend
                 print("In Short Position")
                 order = rh.orders.order(symbol        = inverse_symbol,
                                         quantity      = inverse_shares_owned,
@@ -204,10 +219,12 @@ def place_orders(df):
                         break
                     time.sleep(5)  # Add a delay to avoid excessive API calls
                 in_short_position = False
+# If the current trend is a downtrend
         else:
             print("Current Trend: DownTrend")
             print("You can trade with ", inverse_shares_to_trade, " shares")
-            if not in_short_position: #opening short position on downtrend
+            #opening short position on downtrend
+            if not in_short_position: 
                 order = rh.orders.order(symbol        = inverse_symbol,
                                         quantity      = inverse_shares_to_trade,
                                         side          = "buy",
@@ -237,11 +254,23 @@ def place_orders(df):
                                                 jsonify= True)
                         pprint.pprint(inverse_trailing_stop)
                         print(f"Trailing Stop Order for {symbol} position")
-                        inverse_trailing_stop_id = inverse_trailing_stop['id']
+                        inverse_trailing_stop_order_id = inverse_trailing_stop['id']
+                        in_inverse_trailing_stop = True
                         break
                     time.sleep(5)  # Add a delay to avoid excessive API calls
-
-            if in_long_position: #close long position on downtrend
+            #close long trailing stop on downtrend        
+            if in_trailing_stop:
+                open_orders = rh.orders.get_all_open_stock_orders()
+                for open_order in open_orders:
+                    if open_order['id'] == trailing_stop_order_id:
+                        print("Cancelling Trailing Stop Order")
+                        rh.orders.cancel_stock_order(trailing_stop_order_id)
+                        break
+                in_trailing_stop = False
+                # Update the trailing stop price and time
+                last_trailing_stop_price = float(stock_quote['last_trade_price'])
+            #close long position on downtrend
+            if in_long_position: 
                 print("In Long Position")
                 order = rh.orders.order(symbol        = symbol,
                                         quantity      = shares_owned,
