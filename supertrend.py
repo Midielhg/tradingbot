@@ -94,9 +94,11 @@ def place_orders(df):
         print(df.tail(1)) # Log the last 2 rows of the dataframe
         global reference_id
         global trailing_stop_order_id, inverse_trailing_stop_order_id
+        global in_trailing_stop, in_inverse_trailing_stop
         global in_long_position, last_trailing_stop_time, last_trailing_stop_price, last_inverse_trailing_stop_price
         global cooldown_period  # Add this line to ensure cooldown_period is accessible
         stock_positions = rh.account.get_all_positions()
+        open_orders = rh.orders.get_all_open_stock_orders()  # Define open_orders here
 
         try:
             stock_quote = rh.get_stock_quote_by_symbol(symbol)
@@ -131,12 +133,13 @@ def place_orders(df):
                 market_value = shares_owned * float(stock_quote['last_trade_price'])
                 if shares_owned > 0:
                     print(f"\nYou own {int(shares_owned)} shares of {symbol} with a Market Value of: ${float(market_value)}")
+                in_long_position = True
             elif item['symbol'] == inverse_symbol:
                 inverse_shares_owned = float(item['quantity'])
                 inverse_market_value = inverse_shares_owned * float(inverse_stock_quote['last_trade_price'])
                 if inverse_shares_owned:
                     print(f"\nYou own {int(inverse_shares_owned)} shares of {inverse_symbol} with a Market Value of: ${float(inverse_market_value)}")
-        
+                in_short_position = True
         # Calculate the number of shares to trade
         shares_to_trade = int(trade_amount // float(stock_quote['last_trade_price']))
         inverse_shares_to_trade = int(trade_amount // float(inverse_stock_quote['last_trade_price']))
@@ -160,9 +163,11 @@ def place_orders(df):
                                         extendedHours = True,
                                         market_hours  = "extended_hours")                
                 print(f"Opening {symbol} position")
-                # Extract the order ID from the order response
+                if 'id' not in order:
+                    print("Order placement failed:", order)
+                    return
                 order_id = order['id']
-                # Wait for the order to be filled
+                # Extract the order ID from the order response
                 while True:
                     open_orders = rh.orders.get_all_open_stock_orders()
                     order_found = False
@@ -209,6 +214,9 @@ def place_orders(df):
                                         extendedHours = True,
                                         market_hours  = "extended_hours")
                 print("Closing ", inverse_shares_owned, " shares of ", inverse_symbol)
+                if 'id' not in order:
+                    print("Order placement failed:", order)
+                    return
                 order_id = order['id']
                 while True:
                     open_orders = rh.orders.get_all_open_stock_orders()
@@ -235,7 +243,9 @@ def place_orders(df):
                                         market_hours  = "extended_hours")
                 print(f"Opening {inverse_symbol} position")
                 pprint.pprint(order)
-                # Extract the order ID from the order response
+                if 'id' not in order:
+                    print("Order placement failed:", order)
+                    return
                 order_id = order['id']
                 while True:
                     open_orders = rh.orders.get_all_open_stock_orders()
@@ -281,6 +291,9 @@ def place_orders(df):
                                         extendedHours = True,
                                         market_hours  = "extended_hours")
                 print(f"Closing {symbol} position")
+                if 'id' not in order:
+                    print("Order placement failed:", order)
+                    return
                 order_id = order['id']
                 while True:
                     open_orders = rh.orders.get_all_open_stock_orders()
@@ -296,23 +309,22 @@ def place_orders(df):
                 in_long_position = False
                 
         #if any of the trailing_stop_order_id or inverse_trailing_stop_order_id it not on open order, begin cooldown period
+        trailing_stop_order_id_found = False
         if in_trailing_stop:
             for order in open_orders:
-                order_id_found = False
                 if order['id'] == trailing_stop_order_id:
-                    order_id_found = True
+                    trailing_stop_order_id_found = True
                     break
-            if not order_id_found:
+            if not trailing_stop_order_id_found:
                 print("Trailing Stop Orders limits hits. Starting cooldown period.")
                 last_trailing_stop_time = time.time() # Set the last_trailing_stop_time to the current time
-                
+        inverse_trailing_stop_order_id_found = False       
         if in_inverse_trailing_stop:
             for order in open_orders:
-                order_id_found = False
                 if order['id'] == inverse_trailing_stop_order_id:
-                    order_id_found = True
+                    inverse_trailing_stop_order_id_found = True
                     break
-            if not order_id_found:
+            if not inverse_trailing_stop_order_id_found:
                 print("Inverse Trailing Stop Orders limits hits. Starting cooldown period.")
                 last_trailing_stop_time = time.time()
         
@@ -351,6 +363,9 @@ def close_all_positions():
                                         extendedHours = True,
                                         market_hours  = "extended_hours")
                 print(f"Closing all positions by selling {shares_owned} shares of {symbol}")
+                if 'id' not in order:
+                    print("Order placement failed:", order)
+                    return
                 while True:
                     open_orders = rh.orders.get_all_open_stock_orders()
                     order_found = False
@@ -372,6 +387,9 @@ def close_all_positions():
                                         extendedHours = True,
                                         market_hours  = "extended_hours")
                 print(f"Closing all positions by selling {inverse_shares_owned} shares of {inverse_symbol}")
+                if 'id' not in order:
+                    print("Order placement failed:", order)
+                    return
                 while True:
                     open_orders = rh.orders.get_all_open_stock_orders()
                     order_found = False
