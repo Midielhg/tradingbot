@@ -21,9 +21,6 @@ ROTH_IRA = "928817659"
 
 #login to the Robinhood account
 rh.login(os.getenv('ROBINHOOD_USERNAME'), os.getenv('ROBINHOOD_PASSWORD'))
-#login to Webull
-wb.login(os.getenv('WEBULL_USERNAME'), os.getenv('WEBULL_PASSWORD'))
-#initialize webull
 
 try:
     positions = rh.account.get_open_stock_positions()
@@ -55,13 +52,18 @@ df = pd.DataFrame(data)
 print(df)
 
 
-#get the total available cash in the Robinhood IRA account
+# Ask the user how much money to use on the Roth IRA for the copy of the portfolio
 try:
-    total_cash = rh.profiles.load_basic_profile(account_number=ROTH_IRA)['cash']
-except Exception as e:
-    print(f"Error fetching total cash: {e}")
-    total_cash = 0
-print("Total Cash available on ",ROTH_IRA, ": " ,total_cash)
+    total_cash = float(input("Enter the amount of money to use on the Roth IRA for the copy of the portfolio: "))
+except ValueError:
+    print("Invalid input. Using available cash in the Roth IRA account.")
+    try:
+        total_cash = rh.profiles.load_basic_profile(account_number=ROTH_IRA)['cash']
+    except Exception as e:
+        print(f"Error fetching total cash: {e}")
+        total_cash = 0
+
+print("Total Cash available on ", ROTH_IRA, ": ", total_cash)
 
 
 # check is the Roth IRA account has some or all of the same positions as the individual account
@@ -75,6 +77,37 @@ IRA_market_values = [round(float(IRA_shares[i]) * float(IRA_prices[i]), 2) for i
 IRA_percentages = [round((IRA_market_value / sum(IRA_market_values)) * 100, 2) for IRA_market_value in IRA_market_values]
 print("Total Market Value in Roth IRA: ", sum(IRA_market_values))
 print("total percentage in Roth IRA: ", sum(IRA_percentages))
+
+
+# Function to sell shares if the position's percentage in the IRA account is greater than the percentage in the Individual account
+for i in range(len(IRA_symbols)):
+    if IRA_symbols[i] in symbols:
+        index = symbols.index(IRA_symbols[i])
+        if IRA_percentages[i] > percentages[index]:
+            # Calculate the target market value in the IRA account based on the individual account
+            target_market_value = (percentages[index] / 100) * sum(market_values)
+            # Calculate the current market value in the IRA account
+            current_market_value = IRA_market_values[i]
+            # Calculate the difference in market value
+            difference_market_value = current_market_value - target_market_value
+            # Calculate the quantity of shares to sell
+            quantity = round(difference_market_value / IRA_prices[i], 2)
+            if quantity > 0:
+                print("Selling ", quantity, " shares of ", IRA_symbols[i])
+                try:
+                    order = rh.orders.order(symbol=IRA_symbols[i], quantity=quantity, side="sell", account_number=ROTH_IRA, extendedHours=True, market_hours="extended_hours")
+                except Exception as e:
+                    print(f"Error placing sell order for {IRA_symbols[i]}: {e}")
+            else:
+                print("No need to sell ", IRA_symbols[i], " in Roth IRA")
+    else:#if the symbol is not in the individual account then sell all the shares in the Roth IRA account
+        #get the quantity of shares to sell
+        quantity = round(float(IRA_shares[i]), 2)
+        print("Selling ", quantity, " shares of ", IRA_symbols[i])
+        try:
+            order = rh.orders.order(symbol=IRA_symbols[i], quantity=quantity,side="sell", account_number=ROTH_IRA, extendedHours=True,market_hours  = "extended_hours")
+        except Exception as e:
+            print(f"Error placing sell order for {IRA_symbols[i]}: {e}")
       
 # Calculate the target market value in the IRA account based on the individual account
 for i in range(len(symbols)):
@@ -82,7 +115,7 @@ for i in range(len(symbols)):
         index = IRA_symbols.index(symbols[i])
         if percentages[i] != IRA_percentages[index]:
             # Calculate the target market value in the IRA account based on the individual account
-            target_market_value = (percentages[i] / 100) * sum(market_values)
+            target_market_value = (percentages[i] / 100) * total_cash
             # Calculate the current market value in the IRA account
             current_market_value = IRA_market_values[index]
             # Calculate the difference in market value
@@ -92,52 +125,18 @@ for i in range(len(symbols)):
             if quantity > 0:
                 print("Buying ", quantity, " shares of ", symbols[i])
                 try:
-                    order = rh.orders.order(symbol=symbols[i], quantity=quantity, account_number=ROTH_IRA, extendedHours=True)
+                    order = rh.orders.order(symbol=symbols[i], quantity=quantity, side="buy", account_number=ROTH_IRA, extendedHours=True, market_hours="extended_hours")
                 except Exception as e:
                     print(f"Error placing buy order for {symbols[i]}: {e}")
             else:
                 print("No need to buy ", symbols[i], " in Roth IRA")
-    else:
+    else:#
         # Calculate the target market value in the IRA account based on the individual account
-        target_market_value = (percentages[i] / 100) * sum(market_values)
+        target_market_value = (percentages[i] / 100) * total_cash
         # Calculate the quantity of shares to buy
         quantity = round(target_market_value / prices[i], 2)
         print("Buying ", quantity, " shares of ", symbols[i])
         try:
-            order = rh.orders.order(symbol=symbols[i], quantity=quantity, account_number=ROTH_IRA, extendedHours=True)
+            order = rh.orders.order(symbol=symbols[i], quantity=quantity, side="buy", account_number=ROTH_IRA, extendedHours=True, market_hours="extended_hours")
         except Exception as e:
             print(f"Error placing buy order for {symbols[i]}: {e}")
-
-# Function to sell shares if the position's percentage in the IRA account is greater than the percentage in the Individual account
-def sell_shares_to_match_percentage():
-    for i in range(len(IRA_symbols)):
-        if IRA_symbols[i] in symbols:
-            index = symbols.index(IRA_symbols[i])
-            if IRA_percentages[i] > percentages[index]:
-                # Calculate the target market value in the IRA account based on the individual account
-                target_market_value = (percentages[index] / 100) * sum(market_values)
-                # Calculate the current market value in the IRA account
-                current_market_value = IRA_market_values[i]
-                # Calculate the difference in market value
-                difference_market_value = current_market_value - target_market_value
-                # Calculate the quantity of shares to sell
-                quantity = round(difference_market_value / IRA_prices[i], 2)
-                if quantity > 0:
-                    print("Selling ", quantity, " shares of ", IRA_symbols[i])
-                    try:
-                        order = rh.orders.order(symbol=IRA_symbols[i], quantity=quantity, account_number=ROTH_IRA, extendedHours=True)
-                    except Exception as e:
-                        print(f"Error placing sell order for {IRA_symbols[i]}: {e}")
-                else:
-                    print("No need to sell ", IRA_symbols[i], " in Roth IRA")
-        else:
-            #get the quantity of shares to sell
-            quantity = round(float(IRA_shares[i]), 2)
-            print("Selling ", quantity, " shares of ", IRA_symbols[i])
-            try:
-                order = rh.orders.order(symbol=IRA_symbols[i], quantity=quantity, account_number=ROTH_IRA, extendedHours=True)
-            except Exception as e:
-                print(f"Error placing sell order for {IRA_symbols[i]}: {e}")
-
-# Call the sell function to match percentages
-sell_shares_to_match_percentage()
