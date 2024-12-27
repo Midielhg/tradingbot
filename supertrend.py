@@ -10,11 +10,15 @@ wb = webull()
 import pprint
 from datetime import datetime, time as dtime
 import os
+import pyotp
+
+totp  = pyotp.TOTP("6XMSLHZHUD2EHAV7").now()
+print("Current OTP:", totp)
 
 # Initialize Webull and Robinhood
 wb = webull()
 try:
-    rh.login(os.getenv('ROBINHOOD_USERNAME'), os.getenv('ROBINHOOD_PASSWORD'))
+    rh.login(os.getenv('ROBINHOOD_USERNAME'), os.getenv('ROBINHOOD_PASSWORD'), mfa_code=totp)
     print("Welcome Back to the SuperTrend Bot")
 except Exception as e:
     print(f"Failed to login: {e}")
