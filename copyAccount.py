@@ -5,25 +5,21 @@
 #and purchase the same percentage of each position in the IRA account
 
 from webull import webull
-import schedule
 import pandas as pd
 pd.set_option('display.max_rows', None)
 import warnings
 warnings.filterwarnings('ignore')
-import time
 import robin_stocks.robinhood as rh
 wb = webull()
-import pprint
-from datetime import datetime, time as dtime
 import os
 import pyotp
 
+INDIVIDUAL_ACCOUNT = "928817659"
 ROTH_IRA = "928817659"
 
 totp  = pyotp.TOTP("6XMSLHZHUD2EHAV7").now()
 print("Current OTP:", totp)
 rh.login(os.getenv('ROBINHOOD_USERNAME'), os.getenv('ROBINHOOD_PASSWORD'), mfa_code=totp)
-
 
 try:
     positions = rh.account.get_open_stock_positions()
