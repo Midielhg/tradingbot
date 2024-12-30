@@ -13,18 +13,33 @@ import robin_stocks.robinhood as rh
 wb = webull()
 import os
 import pyotp
+import time
 
 ROTH_IRA = "928817659"
-
+username = 'midielhg@gmail.com'
+password = 'nuGcej-famzoj-vafce12'
 totp  = pyotp.TOTP("6XMSLHZHUD2EHAV7").now()
 print("Current OTP:", totp)
-rh.login(os.getenv('ROBINHOOD_USERNAME'), os.getenv('ROBINHOOD_PASSWORD'), mfa_code=totp)
 
-try:
-    positions = rh.account.get_open_stock_positions()
-except Exception as e:
-    print(f"Error fetching positions: {e}")
-    positions = []
+rh.login(username, password, mfa_code=totp)
+
+def fetch_positions_with_retry(max_retries=5, backoff_factor=1):
+    retries = 0
+    while retries < max_retries:
+        try:
+            positions = rh.account.get_open_stock_positions()
+            return positions
+        except Exception as e:
+            if '429' in str(e):
+                retries += 1
+                wait_time = backoff_factor * (2 ** retries)
+                print(f"Rate limit exceeded. Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                print(f"Error fetching positions: {e}")
+                return []
+
+positions = fetch_positions_with_retry()
 
 #get all the symbols from the positions and create a list of symbols
 symbols = [position['symbol'] for position in positions]
@@ -77,6 +92,9 @@ for i in range(len(symbols)):
         # Check if the percentage in the individual account is different from the percentage in the IRA account
         if percentages[i] != IRA_percentages[index]:
             if quantity > 0:
+                if difference_market_value < 10.00:
+                    print(f"Skipping buy order for {symbols[i]} as the expected purchase is under $10.00")
+                    continue
                 print("Buying ", quantity, " shares of ", symbols[i])
                 order = rh.orders.order_buy_fractional_by_quantity(symbol=symbols[i], quantity=quantity, account_number=ROTH_IRA)
                 # order = rh.orders.order(symbol=symbols[i], quantity=quantity, side="buy", account_number=ROTH_IRA, extendedHours=True, market_hours="extended_hours")
@@ -84,6 +102,9 @@ for i in range(len(symbols)):
                 print("No need to buy ", symbols[i], " in Roth IRA")
             if quantity < 0:
                 quantity = abs(quantity)
+                if abs(difference_market_value) < 10.00:
+                    print(f"Skipping sell order for {symbols[i]} as the expected value to sell is under $10.00")
+                    continue
                 print("Selling ", quantity, " shares of ", symbols[i])
                 order = rh.orders.order_sell_fractional_by_quantity(symbol=symbols[i], quantity=quantity, account_number=ROTH_IRA)
     if symbols[i] not in IRA_symbols:
@@ -92,15 +113,19 @@ for i in range(len(symbols)):
         current_market_value = 0 #get the current market value of the symbol in the IRA account
         difference_market_value = target_market_value - current_market_value
         quantity = round(difference_market_value / prices[i], 1)
+        if difference_market_value < 10.00:
+            print(f"Skipping buy order for {symbols[i]} as the expected purchase is under $10.00")
+            continue
         print("Buying ", quantity, " shares of ", symbols[i])
         order = rh.orders.order_buy_fractional_by_quantity(symbol=symbols[i], quantity=quantity, account_number=ROTH_IRA)
-
-
 
 #if the symbol in IRA is not on the individual account, sell all the shares
 for i in range(len(IRA_symbols)):
     if IRA_symbols[i] not in symbols:
         quantity = round(float(IRA_shares[i]), 2)
+        if quantity * IRA_prices[i] < 10.00:
+            print(f"Skipping sell order for {IRA_symbols[i]} as the expected value to sell is under $10.00")
+            continue
         print("Selling ", quantity, " shares of ", IRA_symbols[i])
         try:
             order = rh.orders.order_sell_fractional_by_quantity(symbol=IRA_symbols[i], quantity=quantity, account_number=ROTH_IRA)

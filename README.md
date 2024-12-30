@@ -11,3 +11,9 @@ Run the following script to install all dependencies:
 
 #trade like Nancy video reference 
 https://youtu.be/FQH_m-GEkdI?si=yEOc27KY_ea0S1Fm
+
+
+
+git clone https://github.com/jmfernandes/robin_stocks.git
+cd robin_stocks
+pip install .
